@@ -96,7 +96,8 @@ with chat_column:
                 )
                 
                 # FIXED: Extract value cleanly from Groq completion array indexes
-                lily_response = response.choices.message.content
+                lily_response = response.choices[0].message.content
+
                 
                 response_placeholder.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
                 
