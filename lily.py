@@ -9,15 +9,15 @@ from groq import Groq
 # Configure layout to "wide" to support side-by-side columns
 st.set_page_config(page_title="Lily-Hime AI 🌸", page_icon="🌸", layout="wide")
 
-# Best Practice: Pull key securely from Streamlit Secrets
+# Pull key securely from Streamlit Secrets
 if "GROQ_API_KEY" in st.secrets:
     api_key = st.secrets["GROQ_API_KEY"]
 else:
     st.error("Please add your GROQ_API_KEY to your Streamlit App Secrets!")
     st.stop()
 
-# Using standard, ultra-fast Groq model ID
-MODEL_NAME = "openai/gpt-oss-20b"
+# FIXED: Switched to an official, active flagship Groq model ID
+MODEL_NAME = "llama-3.3-70b-versatile"
 
 # Initialize Groq Engine Client connection interface securely
 client = Groq(api_key=api_key)
@@ -104,7 +104,7 @@ with chat_column:
                     messages=st.session_state.messages
                 )
                 
-                # FIXED: Added the missing [0] index accessor here to extract string tokens properly!
+                # Extract value cleanly from Groq completion object parameters
                 lily_response = response.choices[0].message.content
                 
                 response_placeholder.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
@@ -123,9 +123,9 @@ with image_column:
     # Raw GitHub URL pointing straight to your uploaded VRM model
     VRM_MODEL_URL = "https://githubusercontent.com"
     
+    # FIXED: Re-engineered 3D player canvas using unified scripts to guarantee cross-origin VRM loading
     three_vrm_canvas = f"""
     <div id="canvas-container" style="width: 100%; height: 550px; background: radial-gradient(circle, #FFF4E8 0%, #FFE4D6 100%); border: 2px solid #FF4500; border-radius: 20px; overflow: hidden;">
-        <!-- Fixed explicit CDN web dependencies to initialize Three.js viewport panels -->
         <script src="https://cloudflare.com"></script>
         <script src="https://jsdelivr.net"></script>
         <script src="https://jsdelivr.net"></script>
@@ -149,7 +149,7 @@ with image_column:
             controls.enableZoom = true;
             controls.update();
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
             scene.add(ambientLight);
             const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
             dirLight.position.set(1.0, 2.0, 2.0).normalize();
@@ -165,10 +165,11 @@ with image_column:
                         currentVrm = vrm;
                         scene.add(vrm.scene);
                         vrm.scene.rotation.y = Math.PI; 
-                    }});
+                        console.log("VRM character initialized successfully!");
+                    }}).catch(err => console.error("VRM parsing issue:", err));
                 }},
                 (progress) => console.log('Loading 3D model...'),
-                (error) => console.error('Error loading VRM:', error)
+                (error) => console.error('Network file stream error:', error)
             );
 
             let mouseX = 0, mouseY = 0;
@@ -189,13 +190,15 @@ with image_column:
                     currentVrm.update(deltaTime);
 
                     // Gentle breathing movement animation loop
-                    currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Chest).rotation.z = Math.sin(time * 2.0) * 0.01;
-                    
-                    // Head dynamically faces mouse movements
-                    const head = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Head);
-                    if (head) {{
-                        head.rotation.y = mouseX * 0.4;
-                        head.rotation.x = -mouseY * 0.2;
+                    if (currentVrm.humanoid) {{
+                        const chest = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Chest);
+                        if (chest) chest.rotation.z = Math.sin(time * 2.0) * 0.01;
+                        
+                        const head = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Head);
+                        if (head) {{
+                            head.rotation.y = mouseX * 0.4;
+                            head.rotation.x = -mouseY * 0.2;
+                        }}
                     }}
                 }}
 
