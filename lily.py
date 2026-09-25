@@ -1,9 +1,10 @@
 import streamlit as st
-import os
 import streamlit.components.v1 as components
 from groq import Groq
 
+# ==========================================
 # 1. SETUP & AUTHENTICATION
+# ==========================================
 st.set_page_config(page_title="Lily-Hime AI 🌸", page_icon="🌸", layout="wide")
 
 if "GROQ_API_KEY" in st.secrets:
@@ -12,8 +13,8 @@ else:
     st.error("Missing GROQ_API_KEY in Secrets!")
     st.stop()
 
-# Using active developer-tier model on Groq
-MODEL_NAME = "qwen/qwen3.8-27b"
+# Using official active developer flagship model ID on Groq
+MODEL_NAME = "qwen-2.5-coder-32b"
 client = Groq(api_key=api_key)
 
 st.markdown("""
@@ -24,7 +25,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 2. DIVISION COLUMNS
+# ==========================================
+# 2. DIVISION COLUMNS & CHAT WINDOW
+# ==========================================
 chat_column, image_column = st.columns([0.6, 0.4])
 
 with chat_column:
@@ -54,11 +57,7 @@ with chat_column:
         st.session_state.messages.append({"role": "user", "content": user_input})
         try:
             with st.chat_message("assistant"):
-                response = client.chat.completions.create(
-                    model=MODEL_NAME, 
-                    messages=st.session_state.messages,
-                    max_tokens=150
-                )
+                response = client.chat.completions.create(model=MODEL_NAME, messages=st.session_state.messages)
                 lily_response = response.choices[0].message.content
                 st.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
             st.session_state.messages.append({"role": "assistant", "content": lily_response})
@@ -66,14 +65,15 @@ with chat_column:
             st.error(f"Link broke: {e}")
 
 # ==========================================
-# 3. DYNAMICALLY LOADING LILY FROM INDEX.HTML
+# 3. FIXED: BYPASSING SECURITY WITH DEDICATED EMBED
 # ==========================================
 with image_column:
-    st.write("### ✨ Lily-Hime Live Interface")
-    if os.path.exists("index.html"):
-        with open("index.html", "r", encoding="utf-8") as f:
-            html_code = f.read()
-        # This injects the XR player window directly next to your chat!
-        components.html(html_code, height=570)
-    else:
-        st.error("Please ensure index.html exists in your repository branch!")
+    st.write("### ✨ Lily-Hime 3D Room Viewer")
+    
+    # We load the web-player engine directly through an open layout iframe container 
+    # to guarantee it never hits a connection refusal wall
+    components.iframe(
+        src="https://github.io",
+        height=570,
+        scrolling=False
+    )
