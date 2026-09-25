@@ -12,7 +12,7 @@ else:
     st.error("Missing GROQ_API_KEY in Secrets!")
     st.stop()
 
-# FIXED: Swapped to Groq's official active flagship model string
+# Using official flagship model string
 MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
 
@@ -54,7 +54,11 @@ with chat_column:
         st.session_state.messages.append({"role": "user", "content": user_input})
         try:
             with st.chat_message("assistant"):
-                response = client.chat.completions.create(model=MODEL_NAME, messages=st.session_state.messages)
+                response = client.chat.completions.create(
+                    model=MODEL_NAME, 
+                    messages=st.session_state.messages,
+                    max_tokens=150 # FIXED: Keeps answers brief to completely bypass the 429 token limit error!
+                )
                 lily_response = response.choices[0].message.content
                 st.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
             st.session_state.messages.append({"role": "assistant", "content": lily_response})
