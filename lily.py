@@ -100,8 +100,8 @@ with chat_column:
         except Exception as e:
             st.error(f"A magical shadow barrier broke our link: {e}")
 
-# ==========================================
-# 4. INTERACTIVE 3D ANIME CHARACTER PANEL
+   # ==========================================
+# 4. INTERACTIVE 3D ANIME CHARACTER PANEL (WITH LIVE DEBUGGER)
 # ==========================================
 with image_column:
     st.write("### ✨ Lily-Hime 3D Active Presence")
@@ -109,7 +109,13 @@ with image_column:
     VRM_MODEL_URL = "https://githubusercontent.com"
     
     three_vrm_canvas = f"""
-    <div id="canvas-container" style="width: 100%; height: 550px; background: radial-gradient(circle, #FFF4E8 0%, #FFE4D6 100%); border: 2px solid #FF4500; border-radius: 20px; overflow: hidden;">
+    <div id="canvas-container" style="width: 100%; height: 550px; background: radial-gradient(circle, #FFF4E8 0%, #FFE4D6 100%); border: 2px solid #FF4500; border-radius: 20px; overflow: hidden; position: relative;">
+        
+        <!-- VISIBLE STATUS TRACKER -->
+        <div id="loading-status" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #FF4500; font-family: sans-serif; font-weight: bold; text-align: center; font-size: 16px; z-index: 10;">
+            🌸 Initializing Lily-Hime's Link...
+        </div>
+
         <script src="https://cloudflare.com"></script>
         <script src="https://jsdelivr.net"></script>
         <script src="https://jsdelivr.net"></script>
@@ -117,62 +123,81 @@ with image_column:
         
         <script>
             const container = document.getElementById('canvas-container');
+            const statusDiv = document.getElementById('loading-status');
             
-            const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(35, container.clientWidth / 550, 0.1, 1000);
-            camera.position.set(0.0, 1.4, 1.8);
+            function updateStatus(msg, isError = false) {{
+                statusDiv.innerText = msg;
+                if (isError) statusDiv.style.color = "red";
+            }}
 
-            const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
-            renderer.setSize(container.clientWidth, 550);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.outputEncoding = THREE.sRGBEncoding;
-            container.appendChild(renderer.domElement);
+            try {{
+                const scene = new THREE.Scene();
+                const camera = new THREE.PerspectiveCamera(35, container.clientWidth / 550, 0.1, 1000);
+                camera.position.set(0.0, 1.4, 1.8);
 
-            const controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.target.set(0.0, 1.3, 0.0);
-            controls.enableZoom = true;
-            controls.update();
+                const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
+                renderer.setSize(container.clientWidth, 550);
+                renderer.setPixelRatio(window.devicePixelRatio);
+                renderer.outputEncoding = THREE.sRGBEncoding;
+                container.appendChild(renderer.domElement);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-            scene.add(ambientLight);
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            dirLight.position.set(1.0, 2.0, 2.0).normalize();
-            scene.add(dirLight);
+                const controls = new THREE.OrbitControls(camera, renderer.domElement);
+                controls.target.set(0.0, 1.3, 0.0);
+                controls.update();
 
-            const loader = new THREE.GLTFLoader();
-            let currentVrm = null;
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                scene.add(ambientLight);
+                const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                dirLight.position.set(1.0, 2.0, 2.0).normalize();
+                scene.add(dirLight);
 
-            loader.load(
-                '{VRM_MODEL_URL}',
-                (gltf) => {{
-                    THREE.VRM.from(gltf).then((vrm) => {{
-                        currentVrm = vrm;
-                        scene.add(vrm.scene);
-                        vrm.scene.rotation.y = Math.PI; 
-                    }});
-                }},
-                (progress) => console.log('Loading 3D model...'),
-                (error) => console.error('Error loading VRM:', error)
-            );
+                updateStatus("📥 Downloading 3D Assets from GitHub...");
 
-            let mouseX = 0, mouseY = 0;
-            window.addEventListener('mousemove', (e) => {{
-                const rect = container.getBoundingClientRect();
-                mouseX = ((e.clientX - rect.left) / container.clientWidth) * 2 - 1;
-                mouseY = -((e.clientY - rect.top) / 550) * 2 + 1;
-            }});
+                const loader = new THREE.GLTFLoader();
+                let currentVrm = null;
 
-            const clock = new THREE.Clock();
-            function animate() {{
-                requestAnimationFrame(animate);
-                
-                const deltaTime = clock.getDelta();
-                const time = clock.getElapsedTime();
+                loader.load(
+                    '{VRM_MODEL_URL}',
+                    (gltf) => {{
+                        updateStatus("✨ Awakening Lily-Hime...");
+                        THREE.VRM.from(gltf).then((vrm) => {{
+                            currentVrm = vrm;
+                            scene.add(vrm.scene);
+                            vrm.scene.rotation.y = Math.PI; 
+                            
+                            // Hide loading text once she is fully loaded!
+                            statusDiv.style.display = "none"; 
+                        }}).catch(err => {{
+                            updateStatus("❌ VRM Engine Error: " + err.message, true);
+                        }});
+                    }},
+                    (progress) => {{
+                        if (progress.total > 0) {{
+                            let percent = Math.round((progress.loaded / progress.total) * 100);
+                            updateStatus("📥 Downloading Assets: " + percent + "%");
+                        }}
+                    }},
+                    (error) => {{
+                        updateStatus("❌ Connection Blocked! Check if the file exists on GitHub main branch.", true);
+                    }}
+                );
 
-                if (currentVrm) {{
-                    currentVrm.update(deltaTime);
+                let mouseX = 0, mouseY = 0;
+                window.addEventListener('mousemove', (e) => {{
+                    const rect = container.getBoundingClientRect();
+                    mouseX = ((e.clientX - rect.left) / container.clientWidth) * 2 - 1;
+                    mouseY = -((e.clientY - rect.top) / 550) * 2 + 1;
+                }});
 
-                    if (currentVrm.humanoid) {{
+                const clock = new THREE.Clock();
+                function animate() {{
+                    requestAnimationFrame(animate);
+                    
+                    const deltaTime = clock.getDelta();
+                    const time = clock.getElapsedTime();
+
+                    if (currentVrm && currentVrm.humanoid) {{
+                        currentVrm.update(deltaTime);
                         const chest = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Chest);
                         if (chest) chest.rotation.z = Math.sin(time * 2.0) * 0.01;
                         
@@ -182,18 +207,26 @@ with image_column:
                             head.rotation.x = -mouseY * 0.2;
                         }}
                     }}
+                    renderer.render(scene, camera);
                 }}
+                animate();
 
-                renderer.render(scene, camera);
+                window.addEventListener('resize', () => {{
+                    camera.aspect = container.clientWidth / 550;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(container.clientWidth, 550);
+                }});
+
+            }} catch (e) {{
+                updateStatus("💥 Setup Crash: " + e.message, true);
             }}
-            animate();
-
-            window.addEventListener('resize', () => {{
-                camera.aspect = container.clientWidth / 550;
-                camera.updateProjectionMatrix();
-                renderer.setSize(container.clientWidth, 550);
-            }});
         </script>
     </div>
     """
     components.html(three_vrm_canvas, height=570)
+     
+          
+                       
+
+                            
+   
