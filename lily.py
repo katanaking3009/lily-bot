@@ -92,7 +92,6 @@ with chat_column:
                     messages=st.session_state.messages
                 )
                 
-                # FIXED: True integer indexing array access
                 lily_response = response.choices[0].message.content
                 response_placeholder.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
                 
@@ -209,7 +208,6 @@ with image_column:
                 }}
             }}
 
-            // Strict interval polling to ensure scripts are completely loaded before running
             let checkAttempts = 0;
             const scriptCheckLoop = setInterval(() => {{
                 checkAttempts++;
@@ -223,3 +221,6 @@ with image_column:
                 }}
             }}, 100);
         </script>
+    </div>
+    """
+    components.html(three_vrm_canvas, height=570)
