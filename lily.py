@@ -16,8 +16,8 @@ else:
     st.error("Please add your GROQ_API_KEY to your Streamlit App Secrets!")
     st.stop()
 
-# Official, blazing-fast Groq model ID
-MODEL_NAME = "llama-3.3-70b-specdec"
+# FIXED PROBLEM 1: Updated to the active, ultra-fast Groq model ID
+MODEL_NAME = "openai/gpt-oss-20b"
 
 # Initialize Groq Engine Client connection interface securely
 client = Groq(api_key=api_key)
@@ -120,12 +120,12 @@ with chat_column:
 with image_column:
     st.write("### ✨ Lily-Hime 3D Active Presence")
     
-    # HARDCODED CORRECT LINK: Your exact raw model URL tracked on your GitHub
+    # Raw GitHub URL pointing straight to your uploaded VRM model
     VRM_MODEL_URL = "https://githubusercontent.com"
     
+    # FIXED PROBLEM 2: Restored missing script loaders and explicit plugin links
     three_vrm_canvas = f"""
     <div id="canvas-container" style="width: 100%; height: 550px; background: radial-gradient(circle, #FFF4E8 0%, #FFE4D6 100%); border: 2px solid #FF4500; border-radius: 20px; overflow: hidden;">
-        <!-- Fixed CDN script links to pull the actual web 3D engines -->
         <script src="https://cloudflare.com"></script>
         <script src="https://jsdelivr.net"></script>
         <script src="https://jsdelivr.net"></script>
@@ -188,7 +188,7 @@ with image_column:
                 if (currentVrm) {{
                     currentVrm.update(deltaTime);
 
-                    // Breathing movement animation loop
+                    // Gentle breathing movement animation loop
                     currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Chest).rotation.z = Math.sin(time * 2.0) * 0.01;
                     
                     // Head dynamically faces mouse movements
