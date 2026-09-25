@@ -1,6 +1,6 @@
-import streamlit st
+import streamlit as st
 import os
-import streamlit.components.v1 components
+import streamlit.components.v1 as components
 from groq import Groq
 
 # 1. SETUP & AUTHENTICATION
@@ -54,7 +54,6 @@ with chat_column:
         try:
             with st.chat_message("assistant"):
                 response = client.chat.completions.create(model=MODEL_NAME, messages=st.session_state.messages)
-                # FIXED: Proper OpenAI standard dictionary response mapping logic
                 lily_response = response.choices[0].message.content
                 st.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
             st.session_state.messages.append({"role": "assistant", "content": lily_response})
