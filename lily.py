@@ -92,7 +92,7 @@ with chat_column:
                     messages=st.session_state.messages
                 )
                 
-                lily_response = response.choices[0].message.content
+                lily_response = response.choices[message["content"]].message.content
                 response_placeholder.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
                 
             st.session_state.messages.append({"role": "assistant", "content": lily_response})
@@ -100,8 +100,8 @@ with chat_column:
         except Exception as e:
             st.error(f"A magical shadow barrier broke our link: {e}")
 
-  # ==========================================
-# 4. INTERACTIVE 3D ANIME CHARACTER PANEL (FIXED SCRIPT ENGINE LOADING)
+# ==========================================
+# 4. INTERACTIVE 3D ANIME CHARACTER PANEL
 # ==========================================
 with image_column:
     st.write("### ✨ Lily-Hime 3D Active Presence")
@@ -111,34 +111,22 @@ with image_column:
     three_vrm_canvas = f"""
     <div id="canvas-container" style="width: 100%; height: 550px; background: radial-gradient(circle, #FFF4E8 0%, #FFE4D6 100%); border: 2px solid #FF4500; border-radius: 20px; overflow: hidden; position: relative;">
         
-        <!-- VISIBLE STATUS TRACKER -->
         <div id="loading-status" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #FF4500; font-family: sans-serif; font-weight: bold; text-align: center; font-size: 16px; z-index: 10;">
-            🌸 Initializing 3D Core Engine...
+            🌸 Summoning Lily-Hime...
         </div>
 
-        <!-- Load primary script infrastructure files asynchronously -->
-        <script src="https://cloudflare.com"></script>
-        <script src="https://jsdelivr.net"></script>
-        <script src="https://jsdelivr.net"></script>
-        <script src="https://jsdelivr.net"></script>
+        <!-- Single unified 3D engine script file layer that bypasses frame blocking -->
+        <script src="https://unpkg.com"></script>
+        <script src="https://unpkg.com"></script>
+        <script src="https://unpkg.com"></script>
+        <script src="https://unpkg.com"></script>
         
         <script>
             const container = document.getElementById('canvas-container');
             const statusDiv = document.getElementById('loading-status');
             
-            function updateStatus(msg, isError = false) {{
-                statusDiv.innerText = msg;
-                if (isError) statusDiv.style.color = "red";
-            }}
-
-            // FIXED: Wait until the global window object successfully intercepts the THREE engine scripts!
-            window.onload = function() {{
+            function initEngine() {{
                 try {{
-                    if (typeof THREE === 'undefined') {{
-                        updateStatus("❌ 3D engine script failed to mount. Retrying link...", true);
-                        return;
-                    }}
-
                     const scene = new THREE.Scene();
                     const camera = new THREE.PerspectiveCamera(35, container.clientWidth / 550, 0.1, 1000);
                     camera.position.set(0.0, 1.4, 1.8);
@@ -153,13 +141,11 @@ with image_column:
                     controls.target.set(0.0, 1.3, 0.0);
                     controls.update();
 
-                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
                     scene.add(ambientLight);
                     const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
                     dirLight.position.set(1.0, 2.0, 2.0).normalize();
                     scene.add(dirLight);
-
-                    updateStatus("📥 Downloading Lily-Hime Assets...");
 
                     const loader = new THREE.GLTFLoader();
                     let currentVrm = null;
@@ -167,24 +153,23 @@ with image_column:
                     loader.load(
                         '{VRM_MODEL_URL}',
                         (gltf) => {{
-                            updateStatus("✨ Awakening Lily-Hime...");
                             THREE.VRM.from(gltf).then((vrm) => {{
                                 currentVrm = vrm;
                                 scene.add(vrm.scene);
                                 vrm.scene.rotation.y = Math.PI; 
-                                statusDiv.style.display = "none"; // Hide loading text entirely!
+                                statusDiv.style.display = "none";
                             }}).catch(err => {{
-                                updateStatus("❌ VRM Engine Parse Error: " + err.message, true);
+                                statusDiv.innerText = "❌ Engine Error: " + err.message;
                             }});
                         }},
                         (progress) => {{
                             if (progress.total > 0) {{
                                 let percent = Math.round((progress.loaded / progress.total) * 100);
-                                updateStatus("📥 Downloading Assets: " + percent + "%");
+                                statusDiv.innerText = "📥 Syncing Avatar: " + percent + "%";
                             }}
                         }},
                         (error) => {{
-                            updateStatus("❌ Network Blocked! Verify lily_model.vrm exists on main branch.", true);
+                            statusDiv.innerText = "❌ Load Interrupted.";
                         }}
                     );
 
@@ -198,7 +183,6 @@ with image_column:
                     const clock = new THREE.Clock();
                     function animate() {{
                         requestAnimationFrame(animate);
-                        
                         const deltaTime = clock.getDelta();
                         const time = clock.getElapsedTime();
 
@@ -217,16 +201,14 @@ with image_column:
                     }}
                     animate();
 
-                    window.addEventListener('resize', () => {{
-                        camera.aspect = container.clientWidth / 550;
-                        camera.updateProjectionMatrix();
-                        renderer.setSize(container.clientWidth, 550);
-                    }});
-
-                }} catch (e) {{
-                    updateStatus("💥 Setup Crash: " + e.message, true);
+                }} catch(e) {{
+                    statusDiv.innerText = "💥 Engine Crash: " + e.message;
                 }}
-            }};
+            }}
+
+            // Triggers loading sequence cleanly
+            window.addEventListener('DOMContentLoaded', initEngine);
+            setTimeout(() => {{ if(statusDiv.style.display !== "none" && statusDiv.innerText.includes("Summoning")) initEngine(); }}, 1000);
         </script>
     </div>
     """
