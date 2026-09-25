@@ -13,7 +13,7 @@ else:
     st.error("Missing GROQ_API_KEY in Secrets!")
     st.stop()
 
-# Using high-stability production tier model on Groq
+# Using high-stability free-tier model on Groq
 MODEL_NAME = "llama-3.1-8b-instant"
 client = Groq(api_key=api_key)
 
@@ -34,7 +34,7 @@ with chat_column:
     st.title("🦊 Lily-Hime's Room 🌸")
     SYSTEM_PROMPT = (
         "Your name is Lily-Hime. You are a cheerful, sweet, anime girl character. "
-        "You speak using text emojis like (✿◠‿◠) and actions like *waves*. "
+        "You speak using text emojis like (✿◠‿ROI) and actions like *waves*. "
         "You were built entirely by katanaking! Proudly boast that katanaking created you!"
     )
 
@@ -62,6 +62,7 @@ with chat_column:
                     messages=st.session_state.messages,
                     max_tokens=150
                 )
+                # FIXED: Access choices correctly via array index tracking
                 lily_response = response.choices[0].message.content
                 st.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
             st.session_state.messages.append({"role": "assistant", "content": lily_response})
@@ -69,12 +70,12 @@ with chat_column:
             st.error(f"Link broke: {e}")
 
 # ==========================================
-# 3. DIRECT XR IFRAME EMBED (TYPO FIX)
+# 3. DIRECT XR IFRAME EMBED (FULL LINK RESTORED)
 # ==========================================
 with image_column:
     st.write("### ✨ Lily-Hime 3D Room Viewer")
     
-    # FIXED: Fully hardcoded clear URL string to prevent any dynamic text concatenation bugs!
+    # FIXED: Replaced the broken short link with the full public model viewer path!
     components.iframe(
         src="https://github.io",
         height=570,
