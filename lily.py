@@ -92,7 +92,8 @@ with chat_column:
                     messages=st.session_state.messages
                 )
                 
-                lily_response = response.choices[message["content"]].message.content
+                # FIXED: True integer indexing array access
+                lily_response = response.choices[0].message.content
                 response_placeholder.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
                 
             st.session_state.messages.append({"role": "assistant", "content": lily_response})
@@ -112,10 +113,9 @@ with image_column:
     <div id="canvas-container" style="width: 100%; height: 550px; background: radial-gradient(circle, #FFF4E8 0%, #FFE4D6 100%); border: 2px solid #FF4500; border-radius: 20px; overflow: hidden; position: relative;">
         
         <div id="loading-status" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #FF4500; font-family: sans-serif; font-weight: bold; text-align: center; font-size: 16px; z-index: 10;">
-            🌸 Summoning Lily-Hime...
+            🌸 Mounting 3D Engine Assets...
         </div>
 
-        <!-- Single unified 3D engine script file layer that bypasses frame blocking -->
         <script src="https://unpkg.com"></script>
         <script src="https://unpkg.com"></script>
         <script src="https://unpkg.com"></script>
@@ -125,7 +125,7 @@ with image_column:
             const container = document.getElementById('canvas-container');
             const statusDiv = document.getElementById('loading-status');
             
-            function initEngine() {{
+            function start3DScene() {{
                 try {{
                     const scene = new THREE.Scene();
                     const camera = new THREE.PerspectiveCamera(35, container.clientWidth / 550, 0.1, 1000);
@@ -147,6 +147,8 @@ with image_column:
                     dirLight.position.set(1.0, 2.0, 2.0).normalize();
                     scene.add(dirLight);
 
+                    statusDiv.innerText = "📥 Downloading VRM Model Data...";
+
                     const loader = new THREE.GLTFLoader();
                     let currentVrm = null;
 
@@ -159,7 +161,7 @@ with image_column:
                                 vrm.scene.rotation.y = Math.PI; 
                                 statusDiv.style.display = "none";
                             }}).catch(err => {{
-                                statusDiv.innerText = "❌ Engine Error: " + err.message;
+                                statusDiv.innerText = "❌ VRM Parse Fail: " + err.message;
                             }});
                         }},
                         (progress) => {{
@@ -169,7 +171,7 @@ with image_column:
                             }}
                         }},
                         (error) => {{
-                            statusDiv.innerText = "❌ Load Interrupted.";
+                            statusDiv.innerText = "❌ File download interrupted.";
                         }}
                     );
 
@@ -202,14 +204,22 @@ with image_column:
                     animate();
 
                 }} catch(e) {{
-                    statusDiv.innerText = "💥 Engine Crash: " + e.message;
+                    statusDiv.innerText = "💥 Crash: " + e.message;
+                    statusDiv.style.color = "red";
                 }}
             }}
 
-            // Triggers loading sequence cleanly
-            window.addEventListener('DOMContentLoaded', initEngine);
-            setTimeout(() => {{ if(statusDiv.style.display !== "none" && statusDiv.innerText.includes("Summoning")) initEngine(); }}, 1000);
+            // Strict interval polling to ensure scripts are completely loaded before running
+            let checkAttempts = 0;
+            const scriptCheckLoop = setInterval(() => {{
+                checkAttempts++;
+                if (typeof THREE !== 'undefined' && typeof THREE.GLTFLoader !== 'undefined') {{
+                    clearInterval(scriptCheckLoop);
+                    start3DScene();
+                }} else if (checkAttempts > 50) {{
+                    clearInterval(scriptCheckLoop);
+                    statusDiv.innerText = "❌ Network connection dropped. Please refresh the page.";
+                    statusDiv.style.color = "red";
+                }}
+            }}, 100);
         </script>
-    </div>
-    """
-    components.html(three_vrm_canvas, height=570)
