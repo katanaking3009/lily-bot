@@ -13,8 +13,8 @@ else:
     st.error("Missing GROQ_API_KEY in Secrets!")
     st.stop()
 
-# Using official active developer flagship model ID on Groq
-MODEL_NAME = "qwen-2.5-coder-32b"
+# FIXED: Swapped to the correct active developer tier model ID
+MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
 
 st.markdown("""
@@ -57,7 +57,11 @@ with chat_column:
         st.session_state.messages.append({"role": "user", "content": user_input})
         try:
             with st.chat_message("assistant"):
-                response = client.chat.completions.create(model=MODEL_NAME, messages=st.session_state.messages)
+                response = client.chat.completions.create(
+                    model=MODEL_NAME, 
+                    messages=st.session_state.messages,
+                    max_tokens=150 # Keeps answers within free tier limits
+                )
                 lily_response = response.choices[0].message.content
                 st.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
             st.session_state.messages.append({"role": "assistant", "content": lily_response})
@@ -65,13 +69,12 @@ with chat_column:
             st.error(f"Link broke: {e}")
 
 # ==========================================
-# 3. FIXED: BYPASSING SECURITY WITH DEDICATED EMBED
+# 3. DIRECT XR ANIMATOR IFRAME INTEGRATION
 # ==========================================
 with image_column:
     st.write("### ✨ Lily-Hime 3D Room Viewer")
     
-    # We load the web-player engine directly through an open layout iframe container 
-    # to guarantee it never hits a connection refusal wall
+    # This directly embeds XR Animator inside your layout column, bypassing index.html and firewalls entirely!
     components.iframe(
         src="https://github.io",
         height=570,
