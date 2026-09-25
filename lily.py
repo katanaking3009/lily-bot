@@ -13,8 +13,8 @@ else:
     st.error("Missing GROQ_API_KEY in Secrets!")
     st.stop()
 
-# Using the official active model ID on Groq
-MODEL_NAME = "qwen/qwen3.8-27b"
+# Using high-stability production tier model on Groq
+MODEL_NAME = "llama-3.1-8b-instant"
 client = Groq(api_key=api_key)
 
 st.markdown("""
@@ -69,18 +69,14 @@ with chat_column:
             st.error(f"Link broke: {e}")
 
 # ==========================================
-# 3. YOUR GENIUS IDEA: DIRECT MODEL STREAMING
+# 3. DIRECT XR IFRAME EMBED (TYPO FIX)
 # ==========================================
 with image_column:
     st.write("### ✨ Lily-Hime 3D Room Viewer")
     
-    # We pass a highly stable public VRM model link directly into XR Animator parameters
-    # This automatically boots up a beautiful anime girl model without hitting any firewalls!
-    DIRECT_MODEL_URL = "https://github.io"
-    PLAYER_URL = f"https://github.io{DIRECT_MODEL_URL}&physics=1&idle=1"
-    
+    # FIXED: Fully hardcoded clear URL string to prevent any dynamic text concatenation bugs!
     components.iframe(
-        src=PLAYER_URL,
+        src="https://github.io",
         height=570,
         scrolling=False
     )
