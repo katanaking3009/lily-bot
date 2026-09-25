@@ -12,7 +12,7 @@ else:
     st.error("Missing GROQ_API_KEY in Secrets!")
     st.stop()
 
-# Using official flagship model string
+# Using active developer-tier model on Groq
 MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
 
@@ -57,7 +57,7 @@ with chat_column:
                 response = client.chat.completions.create(
                     model=MODEL_NAME, 
                     messages=st.session_state.messages,
-                    max_tokens=150 # FIXED: Keeps answers brief to completely bypass the 429 token limit error!
+                    max_tokens=150
                 )
                 lily_response = response.choices[0].message.content
                 st.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
@@ -65,11 +65,15 @@ with chat_column:
         except Exception as e:
             st.error(f"Link broke: {e}")
 
+# ==========================================
+# 3. DYNAMICALLY LOADING LILY FROM INDEX.HTML
+# ==========================================
 with image_column:
     st.write("### ✨ Lily-Hime Live Interface")
     if os.path.exists("index.html"):
         with open("index.html", "r", encoding="utf-8") as f:
             html_code = f.read()
+        # This injects the XR player window directly next to your chat!
         components.html(html_code, height=570)
     else:
         st.error("Please ensure index.html exists in your repository branch!")
