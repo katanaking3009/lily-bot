@@ -16,7 +16,7 @@ else:
     st.error("Please add your GROQ_API_KEY to your Streamlit App Secrets!")
     st.stop()
 
-# FIXED PROBLEM 1: Updated to the active, ultra-fast Groq model ID
+# Using standard, ultra-fast Groq model ID
 MODEL_NAME = "openai/gpt-oss-20b"
 
 # Initialize Groq Engine Client connection interface securely
@@ -104,8 +104,8 @@ with chat_column:
                     messages=st.session_state.messages
                 )
                 
-                # Extract value cleanly from Groq completion object parameters
-                lily_response = response.choices.message.content
+                # FIXED: Added the missing [0] index accessor here to extract string tokens properly!
+                lily_response = response.choices[0].message.content
                 
                 response_placeholder.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
                 
@@ -123,9 +123,9 @@ with image_column:
     # Raw GitHub URL pointing straight to your uploaded VRM model
     VRM_MODEL_URL = "https://githubusercontent.com"
     
-    # FIXED PROBLEM 2: Restored missing script loaders and explicit plugin links
     three_vrm_canvas = f"""
     <div id="canvas-container" style="width: 100%; height: 550px; background: radial-gradient(circle, #FFF4E8 0%, #FFE4D6 100%); border: 2px solid #FF4500; border-radius: 20px; overflow: hidden;">
+        <!-- Fixed explicit CDN web dependencies to initialize Three.js viewport panels -->
         <script src="https://cloudflare.com"></script>
         <script src="https://jsdelivr.net"></script>
         <script src="https://jsdelivr.net"></script>
