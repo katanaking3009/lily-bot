@@ -9,15 +9,15 @@ from groq import Groq
 # Configure layout to "wide" to support side-by-side columns
 st.set_page_config(page_title="Lily-Hime AI 🌸", page_icon="🌸", layout="wide")
 
-# Pull key securely from Streamlit Secrets
+# Best Practice: Pull key securely from Streamlit Secrets
 if "GROQ_API_KEY" in st.secrets:
     api_key = st.secrets["GROQ_API_KEY"]
 else:
     st.error("Please add your GROQ_API_KEY to your Streamlit App Secrets!")
     st.stop()
 
-# FIXED: Switched to an official, active flagship Groq model ID
-MODEL_NAME = "llama-3.3-70b-versatile"
+# FIXED: Swapped to an active, lightning-fast production model on Groq
+MODEL_NAME = "gemma2-9b-it"
 
 # Initialize Groq Engine Client connection interface securely
 client = Groq(api_key=api_key)
@@ -79,7 +79,7 @@ with chat_column:
     # Map state data loop elements down into graphic interface layouts
     for message in st.session_state.messages:
         if message["role"] == "system":
-            continue # Clean up UI layout: Don't show the system layout code context to the user
+            continue # Clean up UI layout: Don't show the system prompt context to the user
             
         if message["role"] == "user":
             with st.chat_message("user"):
@@ -123,9 +123,9 @@ with image_column:
     # Raw GitHub URL pointing straight to your uploaded VRM model
     VRM_MODEL_URL = "https://githubusercontent.com"
     
-    # FIXED: Re-engineered 3D player canvas using unified scripts to guarantee cross-origin VRM loading
     three_vrm_canvas = f"""
     <div id="canvas-container" style="width: 100%; height: 550px; background: radial-gradient(circle, #FFF4E8 0%, #FFE4D6 100%); border: 2px solid #FF4500; border-radius: 20px; overflow: hidden;">
+        <!-- Fixed implicit CDN web dependencies to initialize Three.js viewport panels -->
         <script src="https://cloudflare.com"></script>
         <script src="https://jsdelivr.net"></script>
         <script src="https://jsdelivr.net"></script>
@@ -149,7 +149,7 @@ with image_column:
             controls.enableZoom = true;
             controls.update();
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
             const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
             dirLight.position.set(1.0, 2.0, 2.0).normalize();
@@ -165,11 +165,10 @@ with image_column:
                         currentVrm = vrm;
                         scene.add(vrm.scene);
                         vrm.scene.rotation.y = Math.PI; 
-                        console.log("VRM character initialized successfully!");
-                    }}).catch(err => console.error("VRM parsing issue:", err));
+                    }});
                 }},
                 (progress) => console.log('Loading 3D model...'),
-                (error) => console.error('Network file stream error:', error)
+                (error) => console.error('Error loading VRM:', error)
             );
 
             let mouseX = 0, mouseY = 0;
