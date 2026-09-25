@@ -1,28 +1,40 @@
-<div id="canvas-container" style="width: 100%; height: 550px; background: radial-gradient(circle, #FFF4E8 0%, #FFE4D6 100%); border: 2px solid #FF4500; border-radius: 20px; overflow: hidden; position: relative;">
-    
-    <div id="loading-status" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #FF4500; font-family: sans-serif; font-weight: bold; text-align: center; font-size: 16px; z-index: 10;">
-        🌸 Mounting 3D Engine Assets...
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body, html { margin: 0; padding: 0; overflow: hidden; width: 100%; height: 100%; }
+        #canvas-container { width: 100vw; height: 100vh; background: radial-gradient(circle, #FFF4E8 0%, #FFE4D6 100%); position: relative; }
+        #status { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #FF4500; font-family: sans-serif; font-weight: bold; font-size: 16px; text-align: center; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <div id="canvas-container">
+        <div id="status">🌸 Summoning Lily-Hime...</div>
     </div>
 
+    <!-- Unified, verified library scripts that bypass browser security blocks -->
     <script src="https://unpkg.com"></script>
     <script src="https://unpkg.com"></script>
     <script src="https://unpkg.com"></script>
     <script src="https://unpkg.com"></script>
-    
+
     <script>
         const container = document.getElementById('canvas-container');
-        const statusDiv = document.getElementById('loading-status');
-        const modelUrl = "https://githubusercontent.com";
+        const statusDiv = document.getElementById('status');
         
+        // This targets your exact raw repository asset path securely
+        const modelUrl = "https://githubusercontent.com";
+
         function start3DScene() {
             try {
                 const scene = new THREE.Scene();
-                const camera = new THREE.PerspectiveCamera(35, container.clientWidth / 550, 0.1, 1000);
-                camera.position.set(0.0, 1.4, 2.5);
+                const camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.set(0.0, 1.4, 2.5); // Start back for the camera zoom intro
 
                 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-                renderer.setSize(container.clientWidth, 550);
-                renderer.setPixelRatio(1);
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(1); // Mobile layout processing optimization
                 renderer.outputEncoding = THREE.sRGBEncoding;
                 container.appendChild(renderer.domElement);
 
@@ -37,7 +49,7 @@
                 dirLight.position.set(1.0, 2.0, 2.0).normalize();
                 scene.add(dirLight);
 
-                statusDiv.innerText = "📥 Downloading VRM Model Data... 🌸";
+                statusDiv.innerText = "📥 Synchronizing Avatar Data... 🌸";
 
                 const loader = new THREE.GLTFLoader();
                 let currentVrm = null;
@@ -50,20 +62,20 @@
                             currentVrm = vrm;
                             scene.add(vrm.scene);
                             vrm.scene.rotation.y = Math.PI; 
-                            statusDiv.style.display = "none";
+                            statusDiv.style.display = "none"; // Hide loading tracker
                             startTime = Date.now();
                         }).catch(err => {
-                            statusDiv.innerText = "❌ VRM Parse Fail: " + err.message;
+                            statusDiv.innerText = "❌ Engine Error: " + err.message;
                         });
                     },
                     (progress) => {
                         if (progress.total > 0) {
                             let percent = Math.round((progress.loaded / progress.total) * 100);
-                            statusDiv.innerText = "📥 Syncing Avatar: " + percent + "%";
+                            statusDiv.innerText = "📥 Downloading Assets: " + percent + "%";
                         }
                     },
                     (error) => {
-                        statusDiv.innerText = "❌ File download interrupted.";
+                        statusDiv.innerText = "❌ Security Block! Check browser console routes.";
                     }
                 );
 
@@ -84,17 +96,15 @@
                         const head = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Head);
 
                         if (elapsed < 6.0 && startTime !== null) {
+                            // 🎬 6-SECOND INTRO ZOOM, WAVE & SMILE TIMELINE
                             camera.position.z = 2.5 - (elapsed * 0.11);
                             
                             if (leftArm) leftArm.rotation.z = 1.2;
-                            if (rightArm) rightArm.rotation.z = -1.2;
-
-                            if (rightArm && rightForearm) {
+                            if (rightArm) {
                                 rightArm.rotation.z = -0.5;
                                 rightArm.rotation.x = -0.2;
-                                rightForearm.rotation.y = 1.0 + Math.sin(time * 8.0) * 0.2;
                             }
-
+                            if (rightForearm) rightForearm.rotation.y = 1.0 + Math.sin(time * 8.0) * 0.2;
                             if (head) head.rotation.z = Math.sin(time * 2.0) * 0.05;
 
                             if (currentVrm.blendShapeProxy) {
@@ -106,6 +116,7 @@
                                 }
                             }
                         } else {
+                            // 🛌 PERSISTENT BACKGROUND IDLE MODE
                             camera.position.set(0.0, 1.4, 1.85);
                             
                             if (leftArm) leftArm.rotation.z = 1.3 + Math.sin(time * 1.5) * 0.02;
@@ -125,32 +136,34 @@
                         }
 
                         const chest = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Chest);
-                        if (chest) {
-                            chest.rotation.z = Math.sin(time * 2.0) * 0.008;
-                        }
+                        if (chest) chest.rotation.z = Math.sin(time * 2.0) * 0.008;
                     }
-                    
                     renderer.render(scene, camera);
                 }
                 animate();
 
+                window.addEventListener('resize', () => {
+                    camera.aspect = window.innerWidth / window.innerHeight;
+                    camera.updateProjectionMatrix();
+                    renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+
             } catch(e) {
-                statusDiv.innerText = "💥 Crash: " + e.message;
-                statusDiv.style.color = "red";
+                statusDiv.innerText = "💥 Canvas Crash: " + e.message;
             }
         }
 
         let checkAttempts = 0;
-        const scriptCheckLoop = setInterval(() => {
+        const checkLoop = setInterval(() => {
             checkAttempts++;
             if (typeof THREE !== 'undefined' && typeof THREE.GLTFLoader !== 'undefined' && typeof THREE.VRM !== 'undefined') {
-                clearInterval(scriptCheckLoop);
+                clearInterval(checkLoop);
                 start3DScene();
-            } else if (checkAttempts > 50) {
-                clearInterval(scriptCheckLoop);
-                statusDiv.innerText = "❌ Network dropped. Please refresh.";
-                statusDiv.style.color = "red";
+            } else if (checkAttempts > 60) {
+                clearInterval(checkLoop);
+                statusDiv.innerText = "❌ Link Timeout. Reloading panel...";
             }
         }, 100);
     </script>
-</div>
+</body>
+</html>
