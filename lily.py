@@ -6,20 +6,16 @@ from groq import Groq
 # ==========================================
 # 1. SETUP & AUTHENTICATION
 # ==========================================
-# Configure layout to "wide" to support side-by-side columns
 st.set_page_config(page_title="Lily-Hime AI 🌸", page_icon="🌸", layout="wide")
 
-# Best Practice: Pull key securely from Streamlit Secrets
 if "GROQ_API_KEY" in st.secrets:
     api_key = st.secrets["GROQ_API_KEY"]
 else:
     st.error("Please add your GROQ_API_KEY to your Streamlit App Secrets!")
     st.stop()
 
-# FIXED: Swapped to an active, lightning-fast production model on Groq
-MODEL_NAME = "gemma2-9b-it"
-
-# Initialize Groq Engine Client connection interface securely
+# Fully active developer-tier model on Groq
+MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
 
 # ==========================================
@@ -27,18 +23,16 @@ client = Groq(api_key=api_key)
 # ==========================================
 st.markdown("""
     <style>
-    /* Main Background color styling */
     .stApp {
         background-color: #FFFDF9; 
     }
     h1 {
-        color: #FF4500 !important; /* Aesthetic Vibrant Orange */
+        color: #FF4500 !important;
         font-family: 'Trebuchet MS', sans-serif;
         font-weight: bold;
         text-align: center;
         margin-bottom: 30px;
     }
-    /* Custom Stylized Bubble for Manga Chat look */
     .anime-bubble {
         background-color: #FFFFFF;
         border: 2px solid #FF4500;
@@ -55,13 +49,11 @@ st.markdown("""
 # ==========================================
 # 3. LAYOUT DIVISION & CHAT WINDOW
 # ==========================================
-# Split the layout window: 60% left for Chat, 40% right for Character Image
 chat_column, image_column = st.columns([0.6, 0.4])
 
 with chat_column:
     st.title("🦊 Lily-Hime's Room 🌸")
 
-    # The Custom Personality Persona: Tied directly to katanaking
     SYSTEM_PROMPT = (
         "Your name is Lily-Hime. You are a cheerful, sweet, and incredibly enthusiastic anime girl character. "
         "You speak using expressive cues, text emojis like (✿◠‿◠), and actions like *giggles*, *smiles*, or *waves*. "
@@ -69,17 +61,15 @@ with chat_column:
         "If anyone asks who made you or who your creator is, you must proudly and happily boast that katanaking created you!"
     )
 
-    # Streamlit persistence dictionary configuration for history tracking
     if "messages" not in st.session_state:
         st.session_state.messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "assistant", "content": "Konnichiwa! 🌸 I am Lily-Hime, your faithful companion. I am standing right here next to your chat! What shall we talk about today, Master katanaking? (✿◠‿◠)"}
         ]
 
-    # Map state data loop elements down into graphic interface layouts
     for message in st.session_state.messages:
         if message["role"] == "system":
-            continue # Clean up UI layout: Don't show the system prompt context to the user
+            continue
             
         if message["role"] == "user":
             with st.chat_message("user"):
@@ -88,7 +78,6 @@ with chat_column:
             with st.chat_message("assistant"):
                 st.markdown(f'<div class="anime-bubble">{message["content"]}</div>', unsafe_allow_html=True)
 
-    # Capture interactive panel text submission actions
     if user_input := st.chat_input("Talk to Lily-Hime..."):
         with st.chat_message("user"):
             st.markdown(user_input)
@@ -98,15 +87,12 @@ with chat_column:
             with st.chat_message("assistant"):
                 response_placeholder = st.empty()
                 
-                # Fetch text tokens from Groq API engine structure
                 response = client.chat.completions.create(
                     model=MODEL_NAME,
                     messages=st.session_state.messages
                 )
                 
-                # Extract value cleanly from Groq completion object parameters
                 lily_response = response.choices[0].message.content
-                
                 response_placeholder.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
                 
             st.session_state.messages.append({"role": "assistant", "content": lily_response})
@@ -120,12 +106,10 @@ with chat_column:
 with image_column:
     st.write("### ✨ Lily-Hime 3D Active Presence")
     
-    # Raw GitHub URL pointing straight to your uploaded VRM model
     VRM_MODEL_URL = "https://githubusercontent.com"
     
     three_vrm_canvas = f"""
     <div id="canvas-container" style="width: 100%; height: 550px; background: radial-gradient(circle, #FFF4E8 0%, #FFE4D6 100%); border: 2px solid #FF4500; border-radius: 20px; overflow: hidden;">
-        <!-- Fixed implicit CDN web dependencies to initialize Three.js viewport panels -->
         <script src="https://cloudflare.com"></script>
         <script src="https://jsdelivr.net"></script>
         <script src="https://jsdelivr.net"></script>
@@ -188,7 +172,6 @@ with image_column:
                 if (currentVrm) {{
                     currentVrm.update(deltaTime);
 
-                    // Gentle breathing movement animation loop
                     if (currentVrm.humanoid) {{
                         const chest = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Chest);
                         if (chest) chest.rotation.z = Math.sin(time * 2.0) * 0.01;
