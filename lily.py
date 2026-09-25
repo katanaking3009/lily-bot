@@ -62,7 +62,7 @@ with chat_column:
         "Your name is Lily-Hime. You are a cheerful, sweet, "
         "and incredibly enthusiastic anime girl character. "
         "You speak using expressive cues, text emojis like "
-        "(✿◠‿◠), and actions like *giggles*, *smiles*, or *waves*. "
+        "(✿◠‿ROI), and actions like *giggles*, *smiles*, or *waves*. "
         "You were built entirely by your master, katanaking! "
         "If anyone asks who made you or who your creator is, "
         "you must proudly and happily boast that katanaking created you!"
@@ -121,9 +121,8 @@ with chat_column:
 with image_column:
     st.write("### ✨ Lily-Hime Live Interface")
     
-    VRM_MODEL_URL = "https://githubusercontent.com"
-    
-    three_vrm_canvas = f"""
+    # Normal Python string layout to fix any brace syntax errors completely
+    three_vrm_canvas = """
     <div id="canvas-container" style="width: 100%; height: 550px; background: radial-gradient(circle, #FFF4E8 0%, #FFE4D6 100%); border: 2px solid #FF4500; border-radius: 20px; overflow: hidden; position: relative;">
         
         <div id="loading-status" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #FF4500; font-family: sans-serif; font-weight: bold; text-align: center; font-size: 16px; z-index: 10;">
@@ -138,14 +137,15 @@ with image_column:
         <script>
             const container = document.getElementById('canvas-container');
             const statusDiv = document.getElementById('loading-status');
+            const modelUrl = "https://githubusercontent.com";
             
-            function start3DScene() {{
-                try {{
+            function start3DScene() {
+                try {
                     const scene = new THREE.Scene();
                     const camera = new THREE.PerspectiveCamera(35, container.clientWidth / 550, 0.1, 1000);
                     camera.position.set(0.0, 1.4, 2.5);
 
-                    const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
+                    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
                     renderer.setSize(container.clientWidth, 550);
                     renderer.setPixelRatio(1);
                     renderer.outputEncoding = THREE.sRGBEncoding;
@@ -162,67 +162,68 @@ with image_column:
                     dirLight.position.set(1.0, 2.0, 2.0).normalize();
                     scene.add(dirLight);
 
-                    statusDiv.innerText = "📥 Downloading VRM Model Data...";
+                    statusDiv.innerText = "📥 Downloading VRM Model Data... 🌸";
 
                     const loader = new THREE.GLTFLoader();
                     let currentVrm = null;
                     let startTime = null;
 
                     loader.load(
-                        '{VRM_MODEL_URL}',
-                        (gltf) => {{
-                            THREE.VRM.from(gltf).then((vrm) => {{
+                        modelUrl,
+                        (gltf) => {
+                            THREE.VRM.from(gltf).then((vrm) => {
                                 currentVrm = vrm;
                                 scene.add(vrm.scene);
                                 vrm.scene.rotation.y = Math.PI; 
                                 statusDiv.style.display = "none";
                                 startTime = Date.now();
-                            }}).catch(err => {{
+                            }).catch(err => {
                                 statusDiv.innerText = "❌ VRM Parse Fail: " + err.message;
-                            }});
-                        }},
-                        (progress) => {{
-                            if (progress.total > 0) {{
+                            });
+                        },
+                        (progress) => {
+                            if (progress.total > 0) {
                                 let percent = Math.round((progress.loaded / progress.total) * 100);
                                 statusDiv.innerText = "📥 Syncing Avatar: " + percent + "%";
-                            }}
-                        }},
-                        (error) => {{
+                            }
+                        },
+                        (error) => {
                             statusDiv.innerText = "❌ File download interrupted.";
-                        }}
+                        }
                     );
 
                     const clock = new THREE.Clock();
-                    function animate() {{
+                    function animate() {
                         requestAnimationFrame(animate);
                         const deltaTime = clock.getDelta();
                         const time = clock.getElapsedTime();
 
-                        if (currentVrm && currentVrm.humanoid) {{
+                        if (currentVrm && currentVrm.humanoid) {
                             currentVrm.update(deltaTime);
                             
                             let elapsed = startTime ? (Date.now() - startTime) / 1000 : 0;
 
-                            const leftUpperArm = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.LeftUpperArm);
-                            const rightUpperArm = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.RightUpperArm);
-                            const rightLowerArm = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.RightLowerArm);
+                            const leftArm = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.LeftUpperArm);
+                            const rightArm = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.RightUpperArm);
+                            const rightForearm = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.RightLowerArm);
                             const head = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Head);
 
-                            if (elapsed < 6.0 && startTime !== null) {{
+                            if (elapsed < 6.0 && startTime !== null) {
                                 camera.position.z = 2.5 - (elapsed * 0.11);
                                 
-                                if (leftUpperArm) leftUpperArm.rotation.z = 1.2;
-                                if (rightUpperArm) rightUpperArm.rotation.z = -1.2;
+                                if (leftArm) leftArm.rotation.z = 1.2;
+                                if (rightArm) rightArm.rotation.z = -1.2;
 
-                                if (rightUpperArm && rightLowerArm) {{
-                                    rightUpperArm.rotation.z = -0.5;
-                                    rightUpperArm.rotation.x = -0.2;
-                                    rightLowerArm.rotation.y = 1.0 + Math.sin(time * 8.0) * 0.2;
-                                }}
+                                if (rightArm && rightForearm) {
+                                    rightArm.rotation.z = -0.5;
+                                    rightArm.rotation.x = -0.2;
+                                    rightForearm.rotation.y = 1.0 + Math.sin(time * 8.0) * 0.2;
+                                }
 
                                 if (head) head.rotation.z = Math.sin(time * 2.0) * 0.05;
 
-                                if (currentVrm.blendShapeProxy) {{
+                                if (currentVrm.blendShapeProxy) {
                                     currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Joy, 0.9);
-                                    if (Math.floor(elapsed) % 3 === 0 && elapsed % 1 < 0.2) {{
-                                    currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 1.0);}} else {{currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 0.0);}}}}}} else {{camera.position.set(0.0, 1.4, 1.85);if (leftUpperArm) leftUpperArm.rotation.z = 1.3 + Math.sin(time * 1.5) * 0.02;if (rightUpperArm) rightUpperArm.rotation.z = -1.3 - Math.sin(time * 1.5) * 0.02;if (rightLowerArm) rightLowerArm.rotation.y = 0.0;if (head) head.rotation.z = 0.0;if (currentVrm.blendShapeProxy) {{currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Joy, 0.3);let blinkCycle = Math.sin(time * 3.5);if (blinkCycle > 0.96) {{currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 1.0);}} else {{currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 0.0);}}}}}}const chest = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Chest);if (chest) {{chest.rotation.z = Math.sin(time * 2.0) * 0.008;}}}}renderer.render(scene, camera);}}animate();}} catch(e) {{statusDiv.innerText = "💥 Crash: " + e.message;statusDiv.style.color = "red";}}}}let checkAttempts = 0;const scriptCheckLoop = setInterval(() => {{checkAttempts++;if (typeof THREE !== 'undefined' && typeof THREE.GLTFLoader !== 'undefined' && typeof THREE.VRM !== 'undefined') {{clearInterval(scriptCheckLoop);start3DScene();}} else if (checkAttempts > 50) {{clearInterval(scriptCheckLoop);statusDiv.innerText = "❌ Network dropped. Please refresh.";statusDiv.style.color = "red";}}}}, 100);"""components.html(three_vrm_canvas, height=570)
+                                    if (Math.floor(elapsed) % 3 === 0 && elapsed % 1 < 0.2) {
+
+                                currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 1.0);} else {currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 0.0);}}} else {camera.position.set(0.0, 1.4, 1.85);if (leftArm) leftArm.rotation.z = 1.3 + Math.sin(time * 1.5) * 0.02;if (rightArm) rightArm.rotation.z = -1.3 - Math.sin(time * 1.5) * 0.02;if (rightForearm) rightForearm.rotation.y = 0.0;if (head) head.rotation.z = 0.0;if (currentVrm.blendShapeProxy) {currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Joy, 0.2);let blinkCycle = Math.sin(time * 3.5);if (blinkCycle > 0.96) {currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 1.0);} else {currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 0.0);}}}const chest = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Chest);if (chest) {chest.rotation.z = Math.sin(time * 2.0) * 0.008;}}renderer.render(scene, camera);}animate();} catch(e) {statusDiv.innerText = "💥 Crash: " + e.message;statusDiv.style.color = "red";}}let checkAttempts = 0;const scriptCheckLoop = setInterval(() => {checkAttempts++;if (typeof THREE !== 'undefined' && typeof THREE.GLTFLoader !== 'undefined' && typeof THREE.VRM !== 'undefined') {clearInterval(scriptCheckLoop);start3DScene();} else if (checkAttempts > 50) {clearInterval(scriptCheckLoop);statusDiv.innerText = "❌ Network dropped. Please refresh.";statusDiv.style.color = "red";}}, 100);"""components.html(three_vrm_canvas, height=570)
