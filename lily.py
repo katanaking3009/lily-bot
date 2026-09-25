@@ -12,8 +12,8 @@ else:
     st.error("Missing GROQ_API_KEY in Secrets!")
     st.stop()
 
-# FIXED: Updated to the permanent active developer flagship model ID on Groq
-MODEL_NAME = "qwen-2.5-coder-32b"
+# FIXED: Swapped to Groq's official active flagship model string
+MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
 
 st.markdown("""
