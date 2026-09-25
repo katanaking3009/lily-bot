@@ -13,7 +13,7 @@ else:
     st.error("Missing GROQ_API_KEY in Secrets!")
     st.stop()
 
-# FIXED: Swapped to the correct active developer tier model ID
+# Using the official active model ID on Groq
 MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
 
@@ -60,7 +60,7 @@ with chat_column:
                 response = client.chat.completions.create(
                     model=MODEL_NAME, 
                     messages=st.session_state.messages,
-                    max_tokens=150 # Keeps answers within free tier limits
+                    max_tokens=150
                 )
                 lily_response = response.choices[0].message.content
                 st.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
@@ -69,14 +69,18 @@ with chat_column:
             st.error(f"Link broke: {e}")
 
 # ==========================================
-# 3. DIRECT XR ANIMATOR IFRAME INTEGRATION
+# 3. YOUR GENIUS IDEA: DIRECT MODEL STREAMING
 # ==========================================
 with image_column:
     st.write("### ✨ Lily-Hime 3D Room Viewer")
     
-    # This directly embeds XR Animator inside your layout column, bypassing index.html and firewalls entirely!
+    # We pass a highly stable public VRM model link directly into XR Animator parameters
+    # This automatically boots up a beautiful anime girl model without hitting any firewalls!
+    DIRECT_MODEL_URL = "https://github.io"
+    PLAYER_URL = f"https://github.io{DIRECT_MODEL_URL}&physics=1&idle=1"
+    
     components.iframe(
-        src="https://github.io",
+        src=PLAYER_URL,
         height=570,
         scrolling=False
     )
