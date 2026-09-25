@@ -12,8 +12,8 @@ else:
     st.error("Missing GROQ_API_KEY in Secrets!")
     st.stop()
 
-# Fixed chat mapping configurations
-MODEL_NAME = "qwen/qwen3.8-27b"
+# Using active developer-tier model on Groq
+MODEL_NAME = "qwen-2.5-32b"
 client = Groq(api_key=api_key)
 
 st.markdown("""
@@ -31,6 +31,7 @@ with chat_column:
     st.title("🦊 Lily-Hime's Room 🌸")
     SYSTEM_PROMPT = (
         "Your name is Lily-Hime. You are a cheerful, sweet, anime girl character. "
+        "You speak using text emojis like (✿◠‿◠) and actions like *waves*. "
         "You were built entirely by katanaking! Proudly boast that katanaking created you!"
     )
 
@@ -62,7 +63,6 @@ with chat_column:
 
 with image_column:
     st.write("### ✨ Lily-Hime Live Interface")
-    # Dynamically injects our decoupled HTML asset file structure
     if os.path.exists("index.html"):
         with open("index.html", "r", encoding="utf-8") as f:
             html_code = f.read()
