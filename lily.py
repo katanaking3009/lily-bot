@@ -6,16 +6,19 @@ from groq import Groq
 # ==========================================
 # 1. SETUP & AUTHENTICATION
 # ==========================================
-# Configure layout to "wide" to support side-by-side columns
-st.set_page_config(page_title="Lily-Hime AI 🌸", page_icon="🌸", layout="wide")
+st.set_page_config(
+    page_title="Lily-Hime AI 🌸",
+    page_icon="🌸",
+    layout="wide"
+)
 
 if "GROQ_API_KEY" in st.secrets:
     api_key = st.secrets["GROQ_API_KEY"]
 else:
-    st.error("Please add your GROQ_API_KEY to your Streamlit App Secrets!")
+    st.error("Missing GROQ_API_KEY in Secrets!")
     st.stop()
 
-# Using official, active developer-tier model on Groq
+# Using active developer-tier model on Groq
 MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
 
@@ -24,18 +27,16 @@ client = Groq(api_key=api_key)
 # ==========================================
 st.markdown("""
     <style>
-    /* Main Background color styling */
     .stApp {
         background-color: #FFFDF9; 
     }
     h1 {
-        color: #FF4500 !important; /* Aesthetic Vibrant Orange */
+        color: #FF4500 !important;
         font-family: 'Trebuchet MS', sans-serif;
         font-weight: bold;
         text-align: center;
         margin-bottom: 30px;
     }
-    /* Custom Stylized Bubble for Manga Chat look */
     .anime-bubble {
         background-color: #FFFFFF;
         border: 2px solid #FF4500;
@@ -52,17 +53,19 @@ st.markdown("""
 # ==========================================
 # 3. LAYOUT DIVISION & CHAT WINDOW
 # ==========================================
-# Split the layout window: 60% left for Chat, 40% right for Character Panel
 chat_column, image_column = st.columns([0.6, 0.4])
 
 with chat_column:
     st.title("🦊 Lily-Hime's Room 🌸")
 
     SYSTEM_PROMPT = (
-        "Your name is Lily-Hime. You are a cheerful, sweet, and incredibly enthusiastic anime girl character. "
-        "You speak using expressive cues, text emojis like (✿◠‿◠), and actions like *giggles*, *smiles*, or *waves*. "
+        "Your name is Lily-Hime. You are a cheerful, sweet, "
+        "and incredibly enthusiastic anime girl character. "
+        "You speak using expressive cues, text emojis like "
+        "(✿◠‿◠), and actions like *giggles*, *smiles*, or *waves*. "
         "You were built entirely by your master, katanaking! "
-        "If anyone asks who made you or who your creator is, you must proudly and happily boast that katanaking created you!"
+        "If anyone asks who made you or who your creator is, "
+        "you must proudly and happily boast that katanaking created you!"
     )
 
     if "messages" not in st.session_state:
@@ -71,7 +74,6 @@ with chat_column:
             {"role": "assistant", "content": "Konnichiwa! 🌸 I am Lily-Hime, your faithful companion. I am standing right here next to your chat! What shall we talk about today, Master katanaking? (✿◠‿◠)"}
         ]
 
-    # Map state data loop elements down into graphic interface layouts
     for message in st.session_state.messages:
         if message["role"] == "system":
             continue
@@ -81,9 +83,11 @@ with chat_column:
                 st.markdown(message["content"])
         elif message["role"] == "assistant":
             with st.chat_message("assistant"):
-                st.markdown(f'<div class="anime-bubble">{message["content"]}</div>', unsafe_allow_html=True)
+                st.markdown(
+                    f'<div class="anime-bubble">{message["content"]}</div>',
+                    unsafe_allow_html=True
+                )
 
-    # Capture interactive panel text submission actions
     if user_input := st.chat_input("Talk to Lily-Hime..."):
         with st.chat_message("user"):
             st.markdown(user_input)
@@ -98,16 +102,21 @@ with chat_column:
                     messages=st.session_state.messages
                 )
                 
-                lily_response = response.choices[0].message.content
-                response_placeholder.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
+                lily_response = response.choices.message.content
+                response_placeholder.markdown(
+                    f'<div class="anime-bubble">{lily_response}</div>',
+                    unsafe_allow_html=True
+                )
                 
-            st.session_state.messages.append({"role": "assistant", "content": lily_response})
+            st.session_state.messages.append(
+                {"role": "assistant", "content": lily_response}
+            )
             
         except Exception as e:
             st.error(f"A magical shadow barrier broke our link: {e}")
 
 # ==========================================
-# 4. 3D PANEL WITH 6-SECOND ANIMATION TIMELINE
+# 4. 3D PANEL WITH FULL BODY CUTSCENE ANIMATION
 # ==========================================
 with image_column:
     st.write("### ✨ Lily-Hime Live Interface")
@@ -134,18 +143,17 @@ with image_column:
                 try {{
                     const scene = new THREE.Scene();
                     const camera = new THREE.PerspectiveCamera(35, container.clientWidth / 550, 0.1, 1000);
-                    camera.position.set(0.0, 1.4, 2.5); // Start slightly further back for intro zoom
+                    camera.position.set(0.0, 1.4, 2.5);
 
                     const renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
                     renderer.setSize(container.clientWidth, 550);
-                    // Mobile optimization: set to 1 instead of window.devicePixelRatio to prevent mobile GPU lag
                     renderer.setPixelRatio(1);
                     renderer.outputEncoding = THREE.sRGBEncoding;
                     container.appendChild(renderer.domElement);
 
                     const controls = new THREE.OrbitControls(camera, renderer.domElement);
                     controls.target.set(0.0, 1.3, 0.0);
-                    controls.enableZoom = false; // Keep fixed layout position
+                    controls.enableZoom = false;
                     controls.update();
 
                     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
@@ -168,7 +176,7 @@ with image_column:
                                 scene.add(vrm.scene);
                                 vrm.scene.rotation.y = Math.PI; 
                                 statusDiv.style.display = "none";
-                                startTime = Date.now(); // Mark time animation timeline begins
+                                startTime = Date.now();
                             }}).catch(err => {{
                                 statusDiv.innerText = "❌ VRM Parse Fail: " + err.message;
                             }});
@@ -193,20 +201,28 @@ with image_column:
                         if (currentVrm && currentVrm.humanoid) {{
                             currentVrm.update(deltaTime);
                             
-                            // Check out our intro time block context
-                            let elapsedCutsceneTime = startTime ? (Date.now() - startTime) / 1000 : 0;
+                            let elapsed = startTime ? (Date.now() - startTime) / 1000 : 0;
 
-                            if (elapsedCutsceneTime < 6.0 && startTime !== null) {{
-                                // 6-Second Cutscene Active Mode
-                                // Camera pans in closer dynamically
-                                camera.position.z = 2.5 - (elapsedCutsceneTime * 0.11);
+                            const leftUpperArm = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.LeftUpperArm);
+                            const rightUpperArm = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.RightUpperArm);
+                            const rightLowerArm = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.RightLowerArm);
+                            const head = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Head);
+
+                            if (elapsed < 6.0 && startTime !== null) {{
+                                camera.position.z = 2.5 - (elapsed * 0.11);
                                 
-                                // Blend face states smoothly: Forced smile activation layout matrix
+                                if (leftUpperArm) leftUpperArm.rotation.z = 1.2;
+                                if (rightUpperArm) rightUpperArm.rotation.z = -1.2;
+
+                                if (rightUpperArm && rightLowerArm) {{
+                                    rightUpperArm.rotation.z = -0.5;
+                                    rightUpperArm.rotation.x = -0.2;
+                                    rightLowerArm.rotation.y = 1.0 + Math.sin(time * 8.0) * 0.2;
+                                }}
+
+                                if (head) head.rotation.z = Math.sin(time * 2.0) * 0.05;
+
                                 if (currentVrm.blendShapeProxy) {{
-                                    currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Joy, 0.8);
-                                    
-                                    // Periodic artificial blinking sequence simulation
-                                    if (Math.floor(elapsedCutsceneTime) % 3 === 0 && elapsedCutsceneTime % 1 < 0.2) {{
-                                        currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 1.0);
-                                    }} else {{
-Use code with caution.currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 0.0);}}}}}} else {{// Background Idle Mode (Post 6-seconds)// Keep camera stationary at proper close framecamera.position.set(0.0, 1.4, 1.85);// Reset back to light default expressionsif (currentVrm.blendShapeProxy) {{currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Joy, 0.2);// Natural random baseline blinking layer matrix looplet blinkCycle = Math.sin(time * 3.5);if (blinkCycle > 0.96) {{currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 1.0);}} else {{currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 0.0);}}}}}}// Shared physics loop for continuous gentle breathing baseline layoutconst chest = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Chest);if (chest) chest.rotation.z = Math.sin(time * 2.0) * 0.008;}}renderer.render(scene, camera);}}animate();}} catch(e) {{statusDiv.innerText = "💥 Crash: " + e.message;statusDiv.style.color = "red";}}}}let checkAttempts = 0;const scriptCheckLoop = setInterval(() => {{checkAttempts++;if (typeof THREE !== 'undefined' && typeof THREE.GLTFLoader !== 'undefined' && typeof THREE.VRM !== 'undefined') {{clearInterval(scriptCheckLoop);start3DScene();}} else if (checkAttempts > 50) {{clearInterval(scriptCheckLoop);statusDiv.innerText = "❌ Network connection dropped. Please refresh the page.";statusDiv.style.color = "red";}}}}, 100);"""components.html(three_vrm_canvas, height=570
+                                    currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Joy, 0.9);
+                                    if (Math.floor(elapsed) % 3 === 0 && elapsed % 1 < 0.2) {{
+                                    currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 1.0);}} else {{currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 0.0);}}}}}} else {{camera.position.set(0.0, 1.4, 1.85);if (leftUpperArm) leftUpperArm.rotation.z = 1.3 + Math.sin(time * 1.5) * 0.02;if (rightUpperArm) rightUpperArm.rotation.z = -1.3 - Math.sin(time * 1.5) * 0.02;if (rightLowerArm) rightLowerArm.rotation.y = 0.0;if (head) head.rotation.z = 0.0;if (currentVrm.blendShapeProxy) {{currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Joy, 0.3);let blinkCycle = Math.sin(time * 3.5);if (blinkCycle > 0.96) {{currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 1.0);}} else {{currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 0.0);}}}}}}const chest = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Chest);if (chest) {{chest.rotation.z = Math.sin(time * 2.0) * 0.008;}}}}renderer.render(scene, camera);}}animate();}} catch(e) {{statusDiv.innerText = "💥 Crash: " + e.message;statusDiv.style.color = "red";}}}}let checkAttempts = 0;const scriptCheckLoop = setInterval(() => {{checkAttempts++;if (typeof THREE !== 'undefined' && typeof THREE.GLTFLoader !== 'undefined' && typeof THREE.VRM !== 'undefined') {{clearInterval(scriptCheckLoop);start3DScene();}} else if (checkAttempts > 50) {{clearInterval(scriptCheckLoop);statusDiv.innerText = "❌ Network dropped. Please refresh.";statusDiv.style.color = "red";}}}}, 100);"""components.html(three_vrm_canvas, height=570)
