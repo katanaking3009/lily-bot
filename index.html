@@ -9,17 +9,16 @@
         #debugLog { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: #fff; padding: 10px; border-radius: 5px; font-size: 12px; max-width: 90%; z-index: 100; }
     </style>
     
-    <!-- Using alternative unpkg standard endpoints instead of jsdelivr -->
-    <script src="https://unpkg.com"></script>
-    <script src="https://unpkg.com"></script>
-    <script src="https://unpkg.com"></script>
+    <!-- Look for files directly in the root repository directory -->
+    <script src="three.min.js"></script>
+    <script src="GLTFLoader.js"></script>
+    <script src="three-vrm.js"></script>
 </head>
 <body>
     <div id="debugLog">Initializing 3D Room Viewer...</div>
     <canvas id="avatarCanvas"></canvas>
     
     <script>
-        // Standard Javascript (No modules or complex imports to break)
         const logger = document.getElementById('debugLog');
         function logStatus(msg, isError = false) {
             logger.innerText = msg;
@@ -27,7 +26,6 @@
         }
 
         try {
-            // 1. Setup Three.js
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
             camera.position.set(0.0, 1.35, 1.1); 
@@ -36,15 +34,13 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
 
-            // 2. Lighting Rig
             const light = new THREE.DirectionalLight(0xffffff, 1.5);
             light.position.set(1.0, 1.0, 1.0).normalize();
             scene.add(light);
             scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-            logStatus("Downloading lily_model.vrm from repository...");
+            logStatus("Downloading lily_model.vrm...");
 
-            // 3. Simple Asset Loading Pipeline
             const loader = new THREE.GLTFLoader();
             loader.setCrossOrigin('anonymous'); 
 
@@ -54,7 +50,6 @@
             loader.load(
                 vrmUrl,
                 (gltf) => {
-                    // Using standard non-module global window helper mapping structure
                     THREE.VRM.from(gltf).then((vrm) => {
                         currentVrm = vrm;
                         scene.add(vrm.scene);
@@ -69,7 +64,7 @@
                         logger.style.display = "none"; 
                     }).catch(err => {
                         console.error(err);
-                        logStatus("VRM Processing Error: The model layout parsed incorrectly.", true);
+                        logStatus("VRM Processing Error: The model data parsed incorrectly.", true);
                     });
                 },
                 (progress) => {
@@ -79,11 +74,10 @@
                 },
                 (error) => {
                     console.error(error);
-                    logStatus("Network Error: Failed to reach your GitHub asset path.", true);
+                    logStatus("Network Error: Failed to fetch the .vrm file.", true);
                 }
             );
 
-            // 4. Runtime Animation Rendering Loop
             const clock = new THREE.Clock();
             function animate() {
                 requestAnimationFrame(animate);
@@ -91,15 +85,12 @@
                 const elapsedTime = clock.getElapsedTime();
 
                 if (currentVrm) {
-                    // Update model state mechanics
                     currentVrm.update(deltaTime);
-                    
                     const spine = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Spine);
                     if (spine) {
                         spine.rotation.z = Math.sin(elapsedTime * 2.0) * 0.008;
                         spine.rotation.x = Math.cos(elapsedTime * 1.5) * 0.005;
                     }
-                    
                     const blinkTiming = Math.sin(elapsedTime * 0.8);
                     if (currentVrm.blendShapeProxy) {
                         if (blinkTiming > 0.95) {
