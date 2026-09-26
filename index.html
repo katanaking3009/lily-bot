@@ -10,9 +10,9 @@
 </head>
 <body>
   <!-- Three.js and loaders -->
-  <script src="three.min.js"></script>
-  <script src="GLTFLoader.js"></script>
-  <script src="three-vrm.js"></script>
+  <script src="../three.min.js"></script>
+<script src="../GLTFLoader.js"></script>
+<script src="../three-vrm.js"></script>
 
   <script>
     // Scene setup
@@ -41,8 +41,8 @@
 
     // VRM loader
     const loader = new THREE.GLTFLoader();
-    loader.load(
-      'lily_model.vrm',
+   loader.load('../lily_model.vrm', ...);
+
       (gltf) => {
         THREE.VRM.from(gltf).then((vrm) => {
           scene.add(vrm.scene);
