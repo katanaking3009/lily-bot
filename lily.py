@@ -1,6 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 from groq import Groq
+import os
 
 # ==========================================
 # 1. SETUP & AUTHENTICATION
@@ -68,7 +69,6 @@ with chat_column:
             st.session_state.messages.append({"role": "assistant", "content": lily_response})
         except Exception as e:
             st.error(f"Link broke: {e}")
-import os
 
 # ==========================================
 # 3. STATIC HTML FILE INJECTION
@@ -87,6 +87,3 @@ with image_column:
         components.html(html_content, height=570, scrolling=False)
     else:
         st.error("Could not find index.html in the repository directory!")
-
-
-    
