@@ -2,21 +2,25 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <title>Lily-Hime 3D Viewer</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #FFFDF9; }
+        body { margin: 0; overflow: hidden; background-color: #FFFDF9; font-family: sans-serif; }
         canvas { width: 100vw; height: 100vh; display: block; }
+        #debugLog { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: #fff; padding: 10px; border-radius: 5px; font-size: 12px; max-width: 90%; z-index: 100; }
     </style>
+    <!-- FIXED IMPORT MAP: Switched to highly reliable jsDelivr standard mirrors -->
     <script type="importmap">
       {
         "imports": {
-          "three": "https://unpkg.com",
-          "three/addons/": "https://unpkg.com",
-          "@pixiv/three-vrm": "https://unpkg.com"
+          "three": "https://jsdelivr.net",
+          "three/addons/loaders/GLTFLoader.js": "https://jsdelivr.net",
+          "@pixiv/three-vrm": "https://jsdelivr.net"
         }
       }
     </script>
 </head>
 <body>
+    <div id="debugLog">Initializing 3D Room Viewer...</div>
     <canvas id="avatarCanvas"></canvas>
     
     <script type="module">
@@ -24,77 +28,108 @@
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { VRMLoaderPlugin } from '@pixiv/three-vrm';
 
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
-        camera.position.set(0.0, 1.35, 1.1); 
+        const logger = document.getElementById('debugLog');
+        function logStatus(msg, isError = false) {
+            logger.innerText = msg;
+            if (isError) logger.style.background = "rgba(255,0,0,0.8)";
+        }
 
-        const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('avatarCanvas'), antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
+        try {
+            // 1. Core Engine Setup
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
+            camera.position.set(0.0, 1.35, 1.1); 
 
-        const light = new THREE.DirectionalLight(0xffffff, 1.5);
-        light.position.set(1.0, 1.0, 1.0).normalize();
-        scene.add(light);
-        scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+            const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('avatarCanvas'), antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
 
-        const loader = new GLTFLoader();
-        loader.register((parser) => new VRMLoaderPlugin(parser));
+            // 2. Lighting Rig
+            const light = new THREE.DirectionalLight(0xffffff, 1.5);
+            light.position.set(1.0, 1.0, 1.0).normalize();
+            scene.add(light);
+            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-        let currentVrm = null;
+            logStatus("Connecting to GitHub asset servers...");
 
-        // FIXED TARGET: Point directly to your GitHub raw asset repository path!
-        const vrmUrl = 'https://githubusercontent.com';
+            // 3. Asset Loading Operations
+            const loader = new GLTFLoader();
+            loader.setCrossOrigin('anonymous'); 
+            loader.register((parser) => new VRMLoaderPlugin(parser));
 
-        loader.load(
-            vrmUrl,
-            (gltf) => {
-                const vrm = gltf.userData.vrm;
-                currentVrm = vrm;
-                scene.add(vrm.scene);
-                vrm.scene.rotation.y = Math.PI; 
-                
-                if (vrm.humanoid) {
-                    const leftArm = vrm.humanoid.getRawBoneNode('leftUpperArm');
-                    const rightArm = vrm.humanoid.getRawBoneNode('rightUpperArm');
-                    if (leftArm) leftArm.rotation.z = -1.1;
-                    if (rightArm) rightArm.rotation.z = 1.1;
-                }
-            },
-            (progress) => {},
-            (error) => console.error('Error loading VRM asset:', error)
-        );
+            let currentVrm = null;
+            // Pulls live from your katanaking3009 repository structure
+            const vrmUrl = 'https://githubusercontent.com';
 
-        const clock = new THREE.Clock();
-        function animate() {
-            requestAnimationFrame(animate);
-            const deltaTime = clock.getDelta();
-            const elapsedTime = clock.getElapsedTime();
-
-            if (currentVrm) {
-                currentVrm.update(deltaTime);
-                const spine = currentVrm.humanoid.getRawBoneNode('spine');
-                if (spine) {
-                    spine.rotation.z = Math.sin(elapsedTime * 2.0) * 0.008;
-                    spine.rotation.x = Math.cos(elapsedTime * 1.5) * 0.005;
-                }
-                const blinkTiming = Math.sin(elapsedTime * 0.8);
-                if (currentVrm.expressionManager) {
-                    if (blinkTiming > 0.95) {
-                        currentVrm.expressionManager.setValue('blink', 1.0);
+            loader.load(
+                vrmUrl,
+                (gltf) => {
+                    const vrm = gltf.userData.vrm;
+                    if (!vrm) {
+                        logStatus("File found, but it lacks key VRM structure data.", true);
+                        return;
+                    }
+                    currentVrm = vrm;
+                    scene.add(vrm.scene);
+                    vrm.scene.rotation.y = Math.PI; 
+                    
+                    if (vrm.humanoid) {
+                        const leftArm = vrm.humanoid.getRawBoneNode('leftUpperArm');
+                        const rightArm = vrm.humanoid.getRawBoneNode('rightUpperArm');
+                        if (leftArm) leftArm.rotation.z = -1.1;
+                        if (rightArm) rightArm.rotation.z = 1.1;
+                    }
+                    logger.style.display = "none"; 
+                },
+                (progress) => {
+                    if (progress.total > 0) {
+                        logStatus(`Loading Lily-Hime: ${Math.round((progress.loaded / progress.total) * 100)}%`);
                     } else {
-                        currentVrm.expressionManager.setValue('blink', 0.0);
+                        logStatus("Downloading avatar payload...");
+                    }
+                },
+                (error) => {
+                    console.error(error);
+                    logStatus("Network Error: Failed to fetch .vrm file from GitHub.", true);
+                }
+            );
+
+            // 4. Runtime Animation Rendering Loop
+            const clock = new THREE.Clock();
+            function animate() {
+                requestAnimationFrame(animate);
+                const deltaTime = clock.getDelta();
+                const elapsedTime = clock.getElapsedTime();
+
+                if (currentVrm) {
+                    currentVrm.update(deltaTime);
+                    const spine = currentVrm.humanoid.getRawBoneNode('spine');
+                    if (spine) {
+                        spine.rotation.z = Math.sin(elapsedTime * 2.0) * 0.008;
+                        spine.rotation.x = Math.cos(elapsedTime * 1.5) * 0.005;
+                    }
+                    const blinkTiming = Math.sin(elapsedTime * 0.8);
+                    if (currentVrm.expressionManager) {
+                        if (blinkTiming > 0.95) {
+                            currentVrm.expressionManager.setValue('blink', 1.0);
+                        } else {
+                            currentVrm.expressionManager.setValue('blink', 0.0);
+                        }
                     }
                 }
+                renderer.render(scene, camera);
             }
-            renderer.render(scene, camera);
-        }
-        animate();
+            animate();
 
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+        } catch (globalError) {
+            logStatus(`Script Crash: ${globalError.message}`, true);
+        }
     </script>
 </body>
 </html>
