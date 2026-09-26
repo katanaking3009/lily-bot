@@ -14,7 +14,6 @@ else:
     st.error("Missing GROQ_API_KEY in Secrets!")
     st.stop()
 
-# FIXED: Swapped to Groq's official active developer tier flagship model ID
 MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
 
@@ -29,7 +28,7 @@ st.markdown("""
 # ==========================================
 # 2. DIVISION COLUMNS & CHAT WINDOW
 # ==========================================
-chat_column, image_column = st.columns([0.6, 0.4])
+chat_column, model_column = st.columns([0.6, 0.4])
 
 with chat_column:
     st.title("🦊 Lily-Hime's Room 🌸")
@@ -46,7 +45,8 @@ with chat_column:
         ]
 
     for message in st.session_state.messages:
-        if message["role"] == "system": continue
+        if message["role"] == "system": 
+            continue
         with st.chat_message(message["role"]):
             if message["role"] == "assistant":
                 st.markdown(f'<div class="anime-bubble">{message["content"]}</div>', unsafe_allow_html=True)
@@ -54,16 +54,16 @@ with chat_column:
                 st.markdown(message["content"])
 
     if user_input := st.chat_input("Talk to Lily-Hime..."):
-        with st.chat_message("user"): st.markdown(user_input)
+        with st.chat_message("user"): 
+            st.markdown(user_input)
         st.session_state.messages.append({"role": "user", "content": user_input})
         try:
             with st.chat_message("assistant"):
                 response = client.chat.completions.create(
                     model=MODEL_NAME, 
                     messages=st.session_state.messages,
-                    max_tokens=150 # Keeps answers within free tier limits
+                    max_tokens=150
                 )
-                # FIXED: Access choices correctly via explicit index tracking array bracket
                 lily_response = response.choices[0].message.content
                 st.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
             st.session_state.messages.append({"role": "assistant", "content": lily_response})
@@ -71,19 +71,17 @@ with chat_column:
             st.error(f"Link broke: {e}")
 
 # ==========================================
-# 3. STATIC HTML FILE INJECTION
+# 3. EMBED 3D MODEL VIEWER
 # ==========================================
-with image_column:
-    st.write("### ✨ Lily-Hime 3D Room Viewer")
-    
-    html_path = "index.html"
-    
+with model_column:
+    st.write("### ✨ Lily-Hime 3D Avatar Viewer")
+
+    html_path = "index.html"  # must be at repo root
+
     if os.path.exists(html_path):
-        # Open and read the raw code from your GitHub/Explorer index.html file
         with open(html_path, "r", encoding="utf-8") as f:
             html_content = f.read()
-            
-        # Inject the HTML code straight into Streamlit
-        components.html(html_content, height=570, scrolling=False)
+        # Embed the Three.js VRM viewer
+        components.html(html_content, height=600, scrolling=False)
     else:
-        st.error("Could not find index.html in the repository directory!")
+        st.error("⚠️ index.html not found at repo root. Please place it next to lily.py.")
