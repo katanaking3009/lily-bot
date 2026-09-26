@@ -68,16 +68,25 @@ with chat_column:
             st.session_state.messages.append({"role": "assistant", "content": lily_response})
         except Exception as e:
             st.error(f"Link broke: {e}")
+import os
 
 # ==========================================
-# 3. DIRECT XR IFRAME EMBED (TYPO FIX)
+# 3. STATIC HTML FILE INJECTION
 # ==========================================
 with image_column:
     st.write("### ✨ Lily-Hime 3D Room Viewer")
     
-    # Fully hardcoded clear URL string to prevent any browser network blocks
-    components.iframe(
-        src="https://github.io",
-        height=570,
-        scrolling=False
-    )
+    html_path = "index.html"
+    
+    if os.path.exists(html_path):
+        # Open and read the raw code from your GitHub/Explorer index.html file
+        with open(html_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+            
+        # Inject the HTML code straight into Streamlit
+        components.html(html_content, height=570, scrolling=False)
+    else:
+        st.error("Could not find index.html in the repository directory!")
+
+
+    
