@@ -2,32 +2,24 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Lily-Hime 3D Viewer</title>
+    <title>Lily-Hime 3D Room Viewer</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #FFFDF9; font-family: sans-serif; }
         canvas { width: 100vw; height: 100vh; display: block; }
         #debugLog { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: #fff; padding: 10px; border-radius: 5px; font-size: 12px; max-width: 90%; z-index: 100; }
     </style>
-    <!-- FIXED IMPORT MAP: Switched to highly reliable jsDelivr standard mirrors -->
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "https://jsdelivr.net",
-          "three/addons/loaders/GLTFLoader.js": "https://jsdelivr.net",
-          "@pixiv/three-vrm": "https://jsdelivr.net"
-        }
-      }
-    </script>
+    
+    <!-- Using alternative unpkg standard endpoints instead of jsdelivr -->
+    <script src="https://unpkg.com"></script>
+    <script src="https://unpkg.com"></script>
+    <script src="https://unpkg.com"></script>
 </head>
 <body>
     <div id="debugLog">Initializing 3D Room Viewer...</div>
     <canvas id="avatarCanvas"></canvas>
     
-    <script type="module">
-        import * as THREE from 'three';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-        import { VRMLoaderPlugin } from '@pixiv/three-vrm';
-
+    <script>
+        // Standard Javascript (No modules or complex imports to break)
         const logger = document.getElementById('debugLog');
         function logStatus(msg, isError = false) {
             logger.innerText = msg;
@@ -35,7 +27,7 @@
         }
 
         try {
-            // 1. Core Engine Setup
+            // 1. Setup Three.js
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
             camera.position.set(0.0, 1.35, 1.1); 
@@ -50,47 +42,44 @@
             scene.add(light);
             scene.add(new THREE.AmbientLight(0xffffff, 0.5));
 
-            logStatus("Connecting to GitHub asset servers...");
+            logStatus("Downloading lily_model.vrm from repository...");
 
-            // 3. Asset Loading Operations
-            const loader = new GLTFLoader();
+            // 3. Simple Asset Loading Pipeline
+            const loader = new THREE.GLTFLoader();
             loader.setCrossOrigin('anonymous'); 
-            loader.register((parser) => new VRMLoaderPlugin(parser));
 
             let currentVrm = null;
-            // Pulls live from your katanaking3009 repository structure
             const vrmUrl = 'https://githubusercontent.com';
 
             loader.load(
                 vrmUrl,
                 (gltf) => {
-                    const vrm = gltf.userData.vrm;
-                    if (!vrm) {
-                        logStatus("File found, but it lacks key VRM structure data.", true);
-                        return;
-                    }
-                    currentVrm = vrm;
-                    scene.add(vrm.scene);
-                    vrm.scene.rotation.y = Math.PI; 
-                    
-                    if (vrm.humanoid) {
-                        const leftArm = vrm.humanoid.getRawBoneNode('leftUpperArm');
-                        const rightArm = vrm.humanoid.getRawBoneNode('rightUpperArm');
-                        if (leftArm) leftArm.rotation.z = -1.1;
-                        if (rightArm) rightArm.rotation.z = 1.1;
-                    }
-                    logger.style.display = "none"; 
+                    // Using standard non-module global window helper mapping structure
+                    THREE.VRM.from(gltf).then((vrm) => {
+                        currentVrm = vrm;
+                        scene.add(vrm.scene);
+                        vrm.scene.rotation.y = Math.PI; 
+                        
+                        if (vrm.humanoid) {
+                            const leftArm = vrm.humanoid.getBoneNode(THREE.VRMBoneName.LeftUpperArm);
+                            const rightArm = vrm.humanoid.getBoneNode(THREE.VRMBoneName.RightUpperArm);
+                            if (leftArm) leftArm.rotation.z = -1.1;
+                            if (rightArm) rightArm.rotation.z = 1.1;
+                        }
+                        logger.style.display = "none"; 
+                    }).catch(err => {
+                        console.error(err);
+                        logStatus("VRM Processing Error: The model layout parsed incorrectly.", true);
+                    });
                 },
                 (progress) => {
                     if (progress.total > 0) {
                         logStatus(`Loading Lily-Hime: ${Math.round((progress.loaded / progress.total) * 100)}%`);
-                    } else {
-                        logStatus("Downloading avatar payload...");
                     }
                 },
                 (error) => {
                     console.error(error);
-                    logStatus("Network Error: Failed to fetch .vrm file from GitHub.", true);
+                    logStatus("Network Error: Failed to reach your GitHub asset path.", true);
                 }
             );
 
@@ -102,18 +91,21 @@
                 const elapsedTime = clock.getElapsedTime();
 
                 if (currentVrm) {
+                    // Update model state mechanics
                     currentVrm.update(deltaTime);
-                    const spine = currentVrm.humanoid.getRawBoneNode('spine');
+                    
+                    const spine = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Spine);
                     if (spine) {
                         spine.rotation.z = Math.sin(elapsedTime * 2.0) * 0.008;
                         spine.rotation.x = Math.cos(elapsedTime * 1.5) * 0.005;
                     }
+                    
                     const blinkTiming = Math.sin(elapsedTime * 0.8);
-                    if (currentVrm.expressionManager) {
+                    if (currentVrm.blendShapeProxy) {
                         if (blinkTiming > 0.95) {
-                            currentVrm.expressionManager.setValue('blink', 1.0);
+                            currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 1.0);
                         } else {
-                            currentVrm.expressionManager.setValue('blink', 0.0);
+                            currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 0.0);
                         }
                     }
                 }
