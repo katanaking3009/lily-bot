@@ -1,120 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>Lily-Hime 3D Room Viewer</title>
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #FFFDF9; font-family: sans-serif; }
-        canvas { width: 100vw; height: 100vh; display: block; }
-        #debugLog { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: #fff; padding: 10px; border-radius: 5px; font-size: 12px; max-width: 90%; z-index: 100; }
-    </style>
-    
-    <!-- Look for files directly in the root repository directory -->
-       <!-- Using highly stable Cloudflare CDN to bypass local network blocks -->
-    <script src="https://cloudflare.com"></script>
-    <script src="https://jsdelivr.net"></script>
-    <script src="https://cloudflare.com"></script>
-
+  <meta charset="UTF-8">
+  <title>Lily Bot 3D</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+  </style>
 </head>
 <body>
-    <div id="debugLog">Initializing 3D Room Viewer...</div>
-    <canvas id="avatarCanvas"></canvas>
-    
-    <script>
-        const logger = document.getElementById('debugLog');
-        function logStatus(msg, isError = false) {
-            logger.innerText = msg;
-            if (isError) logger.style.background = "rgba(255,0,0,0.8)";
-        }
+  <!-- Three.js and loaders -->
+  <script src="three.min.js"></script>
+  <script src="GLTFLoader.js"></script>
+  <script src="three-vrm.js"></script>
 
-        try {
-            const scene = new THREE.Scene();
-            const camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 0.1, 20.0);
-            camera.position.set(0.0, 1.35, 1.1); 
+  <script>
+    // Scene setup
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xeeeeee);
 
-            const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('avatarCanvas'), antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
+    const camera = new THREE.PerspectiveCamera(
+      45,
+      window.innerWidth / window.innerHeight,
+      0.1,
+      1000
+    );
+    camera.position.set(0, 1.5, 3);
 
-            const light = new THREE.DirectionalLight(0xffffff, 1.5);
-            light.position.set(1.0, 1.0, 1.0).normalize();
-            scene.add(light);
-            scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
-            logStatus("Downloading lily_model.vrm...");
+    // Lighting
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(1, 1, 1).normalize();
+    scene.add(light);
 
-            const loader = new THREE.GLTFLoader();
-            loader.setCrossOrigin('anonymous'); 
+    const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambient);
 
-            let currentVrm = null;
-            const vrmUrl = 'https://githubusercontent.com';
+    // VRM loader
+    const loader = new THREE.GLTFLoader();
+    loader.load(
+      'lily_model.vrm',
+      (gltf) => {
+        THREE.VRM.from(gltf).then((vrm) => {
+          scene.add(vrm.scene);
+          console.log('✅ Lily VRM loaded successfully');
+        });
+      },
+      (progress) => {
+        console.log('Loading Lily...', (100.0 * progress.loaded / progress.total).toFixed(2), '%');
+      },
+      (error) => {
+        console.error('❌ Error loading Lily VRM:', error);
+      }
+    );
 
-            loader.load(
-                vrmUrl,
-                (gltf) => {
-                    THREE.VRM.from(gltf).then((vrm) => {
-                        currentVrm = vrm;
-                        scene.add(vrm.scene);
-                        vrm.scene.rotation.y = Math.PI; 
-                        
-                        if (vrm.humanoid) {
-                            const leftArm = vrm.humanoid.getBoneNode(THREE.VRMBoneName.LeftUpperArm);
-                            const rightArm = vrm.humanoid.getBoneNode(THREE.VRMBoneName.RightUpperArm);
-                            if (leftArm) leftArm.rotation.z = -1.1;
-                            if (rightArm) rightArm.rotation.z = 1.1;
-                        }
-                        logger.style.display = "none"; 
-                    }).catch(err => {
-                        console.error(err);
-                        logStatus("VRM Processing Error: The model data parsed incorrectly.", true);
-                    });
-                },
-                (progress) => {
-                    if (progress.total > 0) {
-                        logStatus(`Loading Lily-Hime: ${Math.round((progress.loaded / progress.total) * 100)}%`);
-                    }
-                },
-                (error) => {
-                    console.error(error);
-                    logStatus("Network Error: Failed to fetch the .vrm file.", true);
-                }
-            );
+    // Resize handling
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
 
-            const clock = new THREE.Clock();
-            function animate() {
-                requestAnimationFrame(animate);
-                const deltaTime = clock.getDelta();
-                const elapsedTime = clock.getElapsedTime();
-
-                if (currentVrm) {
-                    currentVrm.update(deltaTime);
-                    const spine = currentVrm.humanoid.getBoneNode(THREE.VRMBoneName.Spine);
-                    if (spine) {
-                        spine.rotation.z = Math.sin(elapsedTime * 2.0) * 0.008;
-                        spine.rotation.x = Math.cos(elapsedTime * 1.5) * 0.005;
-                    }
-                    const blinkTiming = Math.sin(elapsedTime * 0.8);
-                    if (currentVrm.blendShapeProxy) {
-                        if (blinkTiming > 0.95) {
-                            currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 1.0);
-                        } else {
-                            currentVrm.blendShapeProxy.setValue(THREE.VRMBlendShapePresetName.Blink, 0.0);
-                        }
-                    }
-                }
-                renderer.render(scene, camera);
-            }
-            animate();
-
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
-
-        } catch (globalError) {
-            logStatus(`Script Crash: ${globalError.message}`, true);
-        }
-    </script>
+    // Animation loop
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
 </body>
 </html>
