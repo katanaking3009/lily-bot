@@ -81,7 +81,6 @@ with model_column:
     if os.path.exists(html_path):
         with open(html_path, "r", encoding="utf-8") as f:
             html_content = f.read()
-        # Embed the Three.js VRM viewer
         components.html(html_content, height=600, scrolling=False)
     else:
         st.error("⚠️ index.html not found at repo root. Please place it next to lily.py.")
