@@ -29,17 +29,19 @@
     light.position.set(0, 1, 1).normalize();
     scene.add(light);
 
-    // ✅ Load Lily GLB model
+    // ✅ Load Lily VRM model from GitHub/jsDelivr
     const loader = new THREE.GLTFLoader();
     loader.load(
-      'https://drive.google.com/uc?export=download&id=1gzmx_xBaNR6ApnlhgLAeEzAw056eggxi',
+      'https://cdn.jsdelivr.net/gh/katanaking3009/lily-bot/lily_model.vrm',
       function(gltf) {
-        scene.add(gltf.scene);
-        console.log("✅ Lily GLB loaded!");
+        THREE.VRM.from(gltf).then((vrm) => {
+          scene.add(vrm.scene);
+          console.log("✅ Lily VRM loaded!");
+        });
       },
       undefined,
       function(error) {
-        console.error("⚠️ Error loading Lily model:", error);
+        console.error("⚠️ Error loading Lily VRM:", error);
       }
     );
 
