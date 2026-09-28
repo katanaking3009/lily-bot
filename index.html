@@ -28,13 +28,18 @@
     scene.add(light);
 
     // Load Lily GLB model from your hosted link
-    const loader = new THREE.GLTFLoader();
-    loader.load('https://drive.google.com/file/d/1gzmx_xBaNR6ApnlhgLAeEzAw056eggxi/view?usp=sharing/lily_model.glb', function(gltf) {
-      scene.add(gltf.scene);
-      console.log("✅ Lily GLB loaded from external link!");
-    }, undefined, function(error) {
-      console.error("⚠️ Error loading Lily model:", error);
-    });
+   const loader = new THREE.GLTFLoader();
+loader.load('https://drive.google.com/uc?export=download&id=1gzmx_xBaNR6ApnlhgLAeEzAw056eggxi',
+  function(gltf) {
+    scene.add(gltf.scene);
+    console.log("✅ Lily GLB loaded from Google Drive!");
+  },
+  undefined,
+  function(error) {
+    console.error("⚠️ Error loading Lily model:", error);
+  }
+);
+
 
     function animate() {
       requestAnimationFrame(animate);
