@@ -11,9 +11,15 @@ st.set_page_config(page_title="Lily-Hime AI 🌸", page_icon="🌸", layout="wid
 # Make sure the key is loaded correctly
 try:
     api_key = st.secrets["GROQ_API_KEY"]
+    if not api_key or not api_key.startswith("gsk_"):
+        st.error("⚠️ GROQ_API_KEY is missing or malformed.")
+        st.stop()
 except Exception:
-    st.error("⚠️ Missing or invalid GROQ_API_KEY in .streamlit/secrets.toml")
+    st.error("⚠️ GROQ_API_KEY not found in secrets.")
     st.stop()
+
+MODEL_NAME = "qwen/qwen3.8-27b"
+client = Groq(api_key=api_key)
 
 MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
