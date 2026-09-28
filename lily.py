@@ -8,10 +8,11 @@ import os
 # ==========================================
 st.set_page_config(page_title="Lily-Hime AI 🌸", page_icon="🌸", layout="wide")
 
-if "GROQ_API_KEY" in st.secrets:
+# Make sure the key is loaded correctly
+try:
     api_key = st.secrets["GROQ_API_KEY"]
-else:
-    st.error("Missing GROQ_API_KEY in Secrets!")
+except Exception:
+    st.error("⚠️ Missing or invalid GROQ_API_KEY in .streamlit/secrets.toml")
     st.stop()
 
 MODEL_NAME = "qwen/qwen3.8-27b"
@@ -68,7 +69,7 @@ with chat_column:
                 st.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
             st.session_state.messages.append({"role": "assistant", "content": lily_response})
         except Exception as e:
-            st.error(f"Link broke: {e}")
+            st.error(f"⚠️ API call failed: {e}")
 
 # ==========================================
 # 3. EMBED 3D MODEL VIEWER
@@ -85,4 +86,3 @@ with model_column:
     else:
         st.error("⚠️ index.html not found at repo root. Please place it next to lily.py.")
         st.components.v1.iframe("https://katanaking3009.github.io/lily-bot/", height=600)
-
