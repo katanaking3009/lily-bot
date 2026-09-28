@@ -7,10 +7,10 @@
     body { margin: 0; overflow: hidden; }
     canvas { display: block; }
   </style>
-<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@latest/lib/three-vrm.js"></script>
-
+  <!-- ✅ Correct CDN scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@latest/lib/three-vrm.js"></script>
 </head>
 <body>
   <script>
@@ -29,19 +29,19 @@
     light.position.set(0, 1, 1).normalize();
     scene.add(light);
 
-    // Load Lily GLB model from your hosted link
-   const loader = new THREE.GLTFLoader();
-loader.load('https://drive.google.com/uc?export=download&id=1gzmx_xBaNR6ApnlhgLAeEzAw056eggxi',
-  function(gltf) {
-    scene.add(gltf.scene);
-    console.log("✅ Lily GLB loaded from Google Drive!");
-  },
-  undefined,
-  function(error) {
-    console.error("⚠️ Error loading Lily model:", error);
-  }
-);
-
+    // ✅ Load Lily GLB model from Google Drive direct link
+    const loader = new THREE.GLTFLoader();
+    loader.load(
+      'https://drive.google.com/uc?export=download&id=1gzmx_xBaNR6ApnlhgLAeEzAw056eggxi',
+      function(gltf) {
+        scene.add(gltf.scene);
+        console.log("✅ Lily GLB loaded!");
+      },
+      undefined,
+      function(error) {
+        console.error("⚠️ Error loading Lily model:", error);
+      }
+    );
 
     function animate() {
       requestAnimationFrame(animate);
