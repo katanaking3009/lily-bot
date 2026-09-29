@@ -66,20 +66,13 @@ with chat_column:
         except Exception as e:
             st.error(f"⚠️ API call failed: {e}")
 
-# ==========================================
+# ============================================
 # 3. EMBED 3D MODEL VIEWER
-# ==========================================
+# ============================================
+
 with model_column:
     st.write("### ✨ Lily-Hime 3D Avatar Viewer")
 
-    html_path = "index.html"  # must be at repo root
+    # ✅ Direct iframe to GitHub Pages
+    components.iframe("https://katanaking3009.github.io/lily-bot/", height=600)
 
-    if os.path.exists(html_path):
-        with open(html_path, "r", encoding="utf-8") as f:
-            html_content = f.read()
-        # ✅ Use components.html to embed VRM viewer
-        components.html(html_content, height=600, scrolling=False)
-    else:
-        st.error("⚠️ index.html not found at repo root. Please place it next to lily.py.")
-        # ✅ Fallback to GitHub Pages iframe
-        components.iframe("https://katanaking3009.github.io/lily-bot/", height=600)
