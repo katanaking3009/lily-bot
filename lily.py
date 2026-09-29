@@ -65,13 +65,12 @@ with chat_column:
             st.session_state.messages.append({"role": "assistant", "content": lily_response})
         except Exception as e:
             st.error(f"⚠️ API call failed: {e}")
+# ============================================
+# 3. EMBED 3D MODEL VIEWER
+# ============================================
 
-     # ============================================
-     # 3. EMBED 3D MODEL VIEWER
-     # ============================================
+with model_column:
+    st.write("### ✨ Lily-Hime 3D Avatar Viewer")
 
-       with model_column:
-          st.write("### ✨ Lily-Hime 3D Avatar Viewer")
-
-         # ✅ Direct iframe to GitHub Pages
-         components.iframe("https://katanaking3009.github.io/lily-bot/", height=600)
+    # ✅ Direct iframe to GitHub Pages
+    components.iframe("https://katanaking3009.github.io/lily-bot/", height=600)
