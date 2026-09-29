@@ -14,6 +14,7 @@
 </head>
 <body>
   <script>
+    // Scene setup
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0xeeeeee);
 
@@ -28,7 +29,7 @@
     light.position.set(0, 1, 1).normalize();
     scene.add(light);
 
-    // ✅ Load Lily VRM model from your repo via jsDelivr
+    // ✅ Load Lily VRM model
     const loader = new THREE.GLTFLoader();
     loader.load(
       "https://cdn.jsdelivr.net/gh/katanaking3009/lily-bot/lily_model.vrm",
@@ -44,12 +45,19 @@
       }
     );
 
+    // Render loop
     function animate() {
       requestAnimationFrame(animate);
       renderer.render(scene, camera);
     }
     animate();
+
+    // Handle resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
   </script>
 </body>
 </html>
-
