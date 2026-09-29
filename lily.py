@@ -21,17 +21,6 @@ except Exception:
 MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
 
-MODEL_NAME = "qwen/qwen3.8-27b"
-client = Groq(api_key=api_key)
-
-st.markdown("""
-    <style>
-    .stApp { background-color: #FFFDF9; }
-    h1 { color: #FF4500 !important; font-family: 'Trebuchet MS', sans-serif; font-weight: bold; text-align: center; margin-bottom: 30px; }
-    .anime-bubble { background-color: #FFFFFF; border: 2px solid #FF4500; border-radius: 18px; padding: 15px; margin: 5px 0px; color: #2F2F2F; font-size: 16px; box-shadow: 4px 4px 0px #FFE4D6; }
-    </style>
-""", unsafe_allow_html=True)
-
 # ==========================================
 # 2. DIVISION COLUMNS & CHAT WINDOW
 # ==========================================
@@ -52,7 +41,7 @@ with chat_column:
         ]
 
     for message in st.session_state.messages:
-        if message["role"] == "system": 
+        if message["role"] == "system":
             continue
         with st.chat_message(message["role"]):
             if message["role"] == "assistant":
@@ -61,13 +50,13 @@ with chat_column:
                 st.markdown(message["content"])
 
     if user_input := st.chat_input("Talk to Lily-Hime..."):
-        with st.chat_message("user"): 
+        with st.chat_message("user"):
             st.markdown(user_input)
         st.session_state.messages.append({"role": "user", "content": user_input})
         try:
             with st.chat_message("assistant"):
                 response = client.chat.completions.create(
-                    model=MODEL_NAME, 
+                    model=MODEL_NAME,
                     messages=st.session_state.messages,
                     max_tokens=150
                 )
@@ -88,7 +77,9 @@ with model_column:
     if os.path.exists(html_path):
         with open(html_path, "r", encoding="utf-8") as f:
             html_content = f.read()
+        # ✅ Use components.html to embed VRM viewer
         components.html(html_content, height=600, scrolling=False)
     else:
         st.error("⚠️ index.html not found at repo root. Please place it next to lily.py.")
-        st.components.v1.iframe("https://katanaking3009.github.io/lily-bot/", height=600)
+        # ✅ Fallback to GitHub Pages iframe
+        components.iframe("https://katanaking3009.github.io/lily-bot/", height=600)
