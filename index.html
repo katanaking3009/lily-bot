@@ -30,20 +30,21 @@
     scene.add(light);
 
     // ✅ Load Lily VRM model from GitHub/jsDelivr
-    const loader = new THREE.GLTFLoader();
-    loader.load(
-      'https://cdn.jsdelivr.net/gh/katanaking3009/lily-bot/lily_model.vrm',
-      function(gltf) {
-        THREE.VRM.from(gltf).then((vrm) => {
-          scene.add(vrm.scene);
-          console.log("✅ Lily VRM loaded!");
-        });
-      },
-      undefined,
-      function(error) {
-        console.error("⚠️ Error loading Lily VRM:", error);
-      }
-    );
+   const loader = new THREE.GLTFLoader();
+loader.load(
+  'https://cdn.jsdelivr.net/gh/katanaking3009/lily-bot/lily_model.vrm',
+  function(gltf) {
+    THREE.VRM.from(gltf).then((vrm) => {
+      scene.add(vrm.scene);
+      console.log("✅ Lily VRM loaded!");
+    });
+  },
+  undefined,
+  function(error) {
+    console.error("⚠️ Error loading Lily VRM:", error);
+  }
+);
+
 
     function animate() {
       requestAnimationFrame(animate);
