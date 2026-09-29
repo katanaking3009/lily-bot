@@ -1,63 +1,85 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <title>Lily-Hime 3D Avatar Viewer</title>
-  <style>
-    body { margin: 0; overflow: hidden; }
-    canvas { display: block; }
-  </style>
-  <!-- ✅ Correct non-module CDN scripts -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@latest/lib/three-vrm.js"></script>
-</head>
-<body>
-  <script>
-    console.log("THREE keys:", Object.keys(THREE));
+import streamlit as st
+import streamlit.components.v1 as components
+from groq import Groq
+import os
 
-    // Scene setup
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xeeeeee);
+# ==========================================
+# 1. SETUP & AUTHENTICATION
+# ==========================================
+st.set_page_config(page_title="Lily-Hime AI 🌸", page_icon="🌸", layout="wide")
 
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 1.4, 2);
+# Make sure the key is loaded correctly
+try:
+    api_key = st.secrets["GROQ_API_KEY"]
+    if not api_key or not api_key.startswith("gsk_"):
+        st.error("⚠️ GROQ_API_KEY is missing or malformed.")
+        st.stop()
+except Exception:
+    st.error("⚠️ GROQ_API_KEY not found in secrets.")
+    st.stop()
 
-    const renderer = new THREE.WebGLRenderer({antialias:true});
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+MODEL_NAME = "qwen/qwen3.8-27b"
+client = Groq(api_key=api_key)
 
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(0, 1, 1).normalize();
-    scene.add(light);
+# ==========================================
+# 2. DIVISION COLUMNS & CHAT WINDOW
+# ==========================================
+chat_column, model_column = st.columns([0.6, 0.4])
 
-    // ✅ Load Lily VRM model
-    const loader = new THREE.GLTFLoader();
-    loader.load(
-      "https://cdn.jsdelivr.net/gh/katanaking3009/lily-bot/lily_model.vrm",
-      (gltf) => {
-        THREE.VRM.from(gltf).then((vrm) => {
-          scene.add(vrm.scene);
-          console.log("✅ Lily VRM loaded!");
-        });
-      },
-      undefined,
-      (error) => console.error("⚠️ Error loading Lily VRM:", error)
-    );
+with chat_column:
+    st.title("🦊 Lily-Hime's Room 🌸")
+    SYSTEM_PROMPT = (
+        "Your name is Lily-Hime. You are a cheerful, sweet, anime girl character. "
+        "You speak using text emojis like (✿◠‿◠) and actions like *waves*. "
+        "You were built entirely by katanaking! Proudly boast that katanaking created you!"
+    )
 
-    // Render loop
-    function animate() {
-      requestAnimationFrame(animate);
-      renderer.render(scene, camera);
-    }
-    animate();
+    if "messages" not in st.session_state:
+        st.session_state.messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "assistant", "content": "Konnichiwa! 🌸 I am Lily-Hime, your companion. What shall we talk about today, Master katanaking? (✿◠‿◠)"}
+        ]
 
-    // Handle resize
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-  </script>
-</body>
-</html>
+    for message in st.session_state.messages:
+        if message["role"] == "system":
+            continue
+        with st.chat_message(message["role"]):
+            if message["role"] == "assistant":
+                st.markdown(f'<div class="anime-bubble">{message["content"]}</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(message["content"])
+
+    if user_input := st.chat_input("Talk to Lily-Hime..."):
+        with st.chat_message("user"):
+            st.markdown(user_input)
+        st.session_state.messages.append({"role": "user", "content": user_input})
+        try:
+            with st.chat_message("assistant"):
+                response = client.chat.completions.create(
+                    model=MODEL_NAME,
+                    messages=st.session_state.messages,
+                    max_tokens=150
+                )
+                lily_response = response.choices[0].message.content
+                st.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
+            st.session_state.messages.append({"role": "assistant", "content": lily_response})
+        except Exception as e:
+            st.error(f"⚠️ API call failed: {e}")
+
+# ==========================================
+# 3. EMBED 3D MODEL VIEWER
+# ==========================================
+with model_column:
+    st.write("### ✨ Lily-Hime 3D Avatar Viewer")
+
+    html_path = "index.html"  # must be at repo root
+
+    if os.path.exists(html_path):
+        with open(html_path, "r", encoding="utf-8") as f:
+            html_content = f.read()
+        # ✅ Use components.html to embed VRM viewer
+        components.html(html_content, height=600, scrolling=False)
+    else:
+        st.error("⚠️ index.html not found at repo root. Please place it next to lily.py.")
+        # ✅ Fallback to GitHub Pages iframe
+        components.iframe("https://katanaking3009.github.io/lily-bot/", height=600)
