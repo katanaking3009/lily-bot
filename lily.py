@@ -73,6 +73,5 @@ with chat_column:
 with model_column:
     st.write("### ✨ Lily-Hime 3D Avatar Viewer")
 
-    # ✅ Direct iframe to GitHub Pages
+    # ✅ Direct iframe to GitHub Pages (no extra nesting, no else block)
     components.iframe("https://katanaking3009.github.io/lily-bot/", height=600)
-
