@@ -7,17 +7,14 @@
     body { margin: 0; overflow: hidden; }
     canvas { display: block; }
   </style>
+  <!-- ✅ Global scripts (no module specifiers) -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@latest/lib/three-vrm.js"></script>
 </head>
 <body>
-  <script type="module">
-    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js";
-    import { GLTFLoader } from "https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/loaders/GLTFLoader.js";
-    import { VRM } from "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@latest/lib/three-vrm.module.js";
-
-    // Debug: confirm imports
+  <script>
     console.log("THREE keys:", Object.keys(THREE));
-    console.log("GLTFLoader:", GLTFLoader);
-    console.log("VRM:", VRM);
 
     // Scene setup
     const scene = new THREE.Scene();
@@ -35,11 +32,11 @@
     scene.add(light);
 
     // ✅ Load Lily VRM model
-    const loader = new GLTFLoader();
+    const loader = new THREE.GLTFLoader();
     loader.load(
       "https://cdn.jsdelivr.net/gh/katanaking3009/lily-bot/lily_model.vrm",
       (gltf) => {
-        VRM.from(gltf).then((vrm) => {
+        THREE.VRM.from(gltf).then((vrm) => {
           scene.add(vrm.scene);
           console.log("✅ Lily VRM loaded!");
         });
