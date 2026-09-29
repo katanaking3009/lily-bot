@@ -1,62 +1,128 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Lily-Hime 3D Avatar Viewer</title>
+  <meta charset="utf-8" />
+  <title>Lily quick viewer (legacy loader)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body { margin: 0; overflow: hidden; }
-    canvas { display: block; }
+    html,body { height:100%; margin:0; }
+    #canvas-container { width:100%; height:100vh; background:#ddd; overflow:hidden; }
   </style>
-  <!-- ✅ Global scripts (no module specifiers) -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.150.1/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@latest/lib/three-vrm.js"></script>
+
+  <!-- Use r149 (legacy non-module loader works reliably) -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/loaders/GLTFLoader.js"></script>
+  <!-- We are NOT requiring three-vrm here; we only need to display the model -->
 </head>
 <body>
+  <div id="canvas-container"></div>
+
   <script>
-    console.log("THREE keys:", Object.keys(THREE));
-
-    // Scene setup
+    // Basic scene + camera + renderer
+    const container = document.getElementById('canvas-container');
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xeeeeee);
+    scene.background = new THREE.Color(0xcccccc);
 
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 1000);
+    const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
     camera.position.set(0, 1.4, 2);
 
-    const renderer = new THREE.WebGLRenderer({antialias:true});
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio || 1);
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    container.appendChild(renderer.domElement);
 
-    const light = new THREE.DirectionalLight(0xffffff, 1);
-    light.position.set(0, 1, 1).normalize();
-    scene.add(light);
+    // Light
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
+    hemi.position.set(0, 1, 0);
+    scene.add(hemi);
 
-    // ✅ Load Lily VRM model
+    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+    dir.position.set(0.5, 1, 0.5);
+    scene.add(dir);
+
+    // Debug: confirm THREE and GLTFLoader
+    console.log("THREE keys length:", Object.keys(THREE).length);
+    console.log("GLTFLoader available:", typeof THREE.GLTFLoader === "function");
+
+    // Loader (legacy non-module)
     const loader = new THREE.GLTFLoader();
+
+    // Replace this with your VRM/GLB URL — using jsdelivr raw gh path
+    const modelUrl = "https://cdn.jsdelivr.net/gh/katanaking3009/lily-bot/lily_model.vrm";
+
+    // Try to load the model and add the scene
     loader.load(
-      "https://cdn.jsdelivr.net/gh/katanaking3009/lily-bot/lily_model.vrm",
-      (gltf) => {
-        THREE.VRM.from(gltf).then((vrm) => {
-          scene.add(vrm.scene);
-          console.log("✅ Lily VRM loaded!");
-        });
+      modelUrl,
+      function (gltf) {
+        // If it's a VRM, gltf.scene still contains the mesh hierarchy.
+        const model = gltf.scene || gltf.scenes[0];
+        if (!model) {
+          console.error("No scene found in glTF.");
+          return;
+        }
+
+        // Center and scale model a bit
+        const box = new THREE.Box3().setFromObject(model);
+        const size = new THREE.Vector3();
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z);
+        if (maxDim > 0) {
+          const scale = 1.0 / maxDim;
+          model.scale.setScalar(scale * 1.2);
+        }
+        box.setFromObject(model);
+        box.getCenter(model.position).multiplyScalar(-1); // center model at origin
+
+        scene.add(model);
+        console.log("✅ Model added to scene:", model);
+
+        // Optional: rotate slowly so you can see it
+        model.userData._autoRotate = true;
+        animate(); // ensure render loop runs
       },
-      undefined,
-      (error) => console.error("⚠️ Error loading Lily VRM:", error)
+      function (xhr) {
+        console.log("Model loading:", (xhr.loaded / xhr.total * 100).toFixed(1) + "%");
+      },
+      function (err) {
+        console.error("Model load error:", err);
+        alert("Model failed to load. Check console for details.");
+      }
     );
+
+    // Simple orbit-like controls (mouse drag to rotate)
+    let isDown = false, startX = 0, startY = 0, rotX = 0, rotY = 0;
+    container.addEventListener('pointerdown', (e) => { isDown = true; startX = e.clientX; startY = e.clientY; container.setPointerCapture(e.pointerId); });
+    container.addEventListener('pointerup', (e) => { isDown = false; container.releasePointerCapture(e.pointerId); });
+    container.addEventListener('pointermove', (e) => {
+      if (!isDown) return;
+      const dx = (e.clientX - startX) * 0.01;
+      const dy = (e.clientY - startY) * 0.01;
+      rotY += dx;
+      rotX += dy;
+      startX = e.clientX; startY = e.clientY;
+    });
 
     // Render loop
     function animate() {
       requestAnimationFrame(animate);
+      // auto-rotate model if present
+      const model = scene.children.find(c => c.type === "Group" || c.type === "Object3D");
+      if (model) {
+        if (model.userData._autoRotate) model.rotation.y += 0.005;
+        model.rotation.x = rotX;
+        model.rotation.y = rotY;
+      }
       renderer.render(scene, camera);
     }
+
+    // Start a render loop even if model not yet loaded
     animate();
 
-    // Handle resize
+    // Resize handling
     window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.aspect = container.clientWidth / container.clientHeight;
       camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setSize(container.clientWidth, container.clientHeight);
     });
   </script>
 </body>
