@@ -20,12 +20,13 @@ st.markdown("""
       background: transparent !important;
   }
 
-  /* FIX: let clicks pass through Streamlit's page layers to the 3D iframe buttons */
-  .stApp,
-  [data-testid="stAppViewContainer"],
-  [data-testid="stMain"],
+  /* Only the top header bar is click-through, so it can't cover the 3D buttons.
+     Page scrolling is left untouched. */
   [data-testid="stHeader"] {
       pointer-events: none !important;
+  }
+  [data-testid="stToolbar"] {
+      pointer-events: auto !important;
   }
 
   /* Pin ONLY the 3D VRM iframe to cover the full background */
@@ -35,14 +36,6 @@ st.markdown("""
       left: 0 !important;
       width: 100vw !important;
       height: 100vh !important;
-      z-index: 0 !important;
-      border: none !important;
-      pointer-events: auto !important;
-  }
-
-  /* Hide tiny action triggers */
-  iframe[height="0"] {
-      display: none !important;
   }
 
   /* Keep the main chat container above the 3D model */
@@ -82,8 +75,6 @@ st.markdown("""
       backdrop-filter: blur(2px) !important;
       border-radius: 20px !important;
       border: 1px solid rgba(255, 182, 193, 0.35) !important;
-      margin-top: 36vh !important;
-      box-shadow: 0 4px 20px rgba(255, 105, 180, 0.08) !important;
   }
 
   /* Ultra-transparent chat message bubbles */
@@ -420,8 +411,6 @@ def build_vrm_html(b64_vrm):
           if (hips) hips.position.y = baseHipsY + Math.abs(Math.sin(t * 5.5)) * 0.025;
           if (head) { head.rotation.z = 0.14; head.rotation.x = Math.sin(t * 5.5) * 0.05; }
         } else if (currentMode === "blush") {
-          if (head) { head.rotation.z = -0.1; head.rotation.x = 0.2; }
-        } else if (currentMode === "angry") {
           if (spine) spine.rotation.x = -0.05;
           if (head) { head.rotation.x = -0.1; head.rotation.z = 0.0; }
         } else if (currentMode === "sad") {
