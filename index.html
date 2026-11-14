@@ -27,11 +27,10 @@
       left: 50%;
       transform: translateX(-50%);
       display: flex;
-      gap: 8px;
-      background: rgba(255, 255, 255, 0.75);
-      padding: 8px 12px;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 7px 10px;
       border-radius: 24px;
-      backdrop-filter: blur(6px);
       box-shadow: 0 4px 15px rgba(255, 105, 180, 0.25);
       z-index: 10;
     }
@@ -39,7 +38,7 @@
       border: 1px solid #ffb3d9;
       background: white;
       color: #c2185b;
-      padding: 6px 11px;
+      padding: 6px 10px;
       border-radius: 16px;
       font-size: 12px;
       font-weight: 600;
@@ -62,4 +61,235 @@
   </script>
 </head>
 <body>
-  <div id="status">🌸 Summoning Lily-Hime...
+  <div id="status">🌸 Summoning Lily-Hime...</div>
+
+  <div class="controls">
+    <button class="btn" onclick="triggerAction('wave')">👋 Wave</button>
+    <button class="btn" onclick="triggerAction('happy')">😊 Happy</button>
+    <button class="btn" onclick="triggerAction('dance')">💃 Dance</button>
+    <button class="btn" onclick="speakReply()">🔊 Voice</button>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+
+    const status = document.getElementById('status');
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.95;
+    document.body.appendChild(renderer.domElement);
+
+    const camera = new THREE.PerspectiveCamera(28.0, window.innerWidth / window.innerHeight, 0.1, 20.0);
+    camera.position.set(0.0, 1.32, 2.05);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(0.0, 1.22, 0.0);
+    controls.enableDamping = true;
+    controls.update();
+
+    const scene = new THREE.Scene();
+
+    const dirLight = new THREE.DirectionalLight(0xfff5f8, 1.35);
+    dirLight.position.set(1.0, 1.5, 1.5);
+    scene.add(dirLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+
+    const lookAtTarget = new THREE.Object3D();
+    camera.add(lookAtTarget);
+
+    const b64 = "__VRM_BASE64__";
+    const lastReply = "__LAST_REPLY__";
+
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+
+    let currentVrm = null;
+    let actionMode = "idle";
+    let actionTimer = 0;
+    let talkTimer = 0;
+
+    window.triggerAction = (mode) => {
+      actionMode = mode;
+      actionTimer = 3.5;
+    };
+
+    window.speakReply = () => {
+      const textToSay = lastReply || "Konnichiwa Master katanaking!";
+      talkTimer = Math.min(7.0, Math.max(2.5, textToSay.length * 0.06));
+      window.triggerAction("happy");
+
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(textToSay);
+        utter.pitch = 1.4;
+        utter.rate = 1.05;
+
+        const voices = window.speechSynthesis.getVoices();
+        const femVoice = voices.find(v =>
+          v.name.includes("Female") ||
+          v.name.includes("Zira") ||
+          v.name.includes("Google UK English Female") ||
+          v.name.includes("Samantha")
+        );
+        if (femVoice) utter.voice = femVoice;
+
+        utter.onstart = () => { talkTimer = 15.0; };
+        utter.onend = () => { talkTimer = 0.0; };
+        utter.onerror = () => { talkTimer = 0.0; };
+
+        window.speechSynthesis.speak(utter);
+      }
+    };
+
+    const loader = new GLTFLoader();
+    loader.register((parser) => new VRMLoaderPlugin(parser));
+
+    loader.load(
+      blobUrl,
+      (gltf) => {
+        const vrm = gltf.userData.vrm;
+        VRMUtils.removeUnnecessaryVertices(gltf.scene);
+        VRMUtils.rotateVRM0(vrm);
+        vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
+
+        if (vrm.lookAt) vrm.lookAt.target = lookAtTarget;
+
+        scene.add(vrm.scene);
+        currentVrm = vrm;
+        status.style.display = 'none';
+
+        if (lastReply && lastReply.length > 0) {
+          window.speakReply();
+          if (lastReply.toLowerCase().includes("konnichiwa")) {
+            window.triggerAction("wave");
+          }
+        }
+      },
+      undefined,
+      (error) => {
+        status.textContent = "⚠️ Error loading VRM";
+        console.error(error);
+      }
+    );
+
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      const t = clock.getElapsedTime();
+
+      if (currentVrm && currentVrm.humanoid) {
+        const h = currentVrm.humanoid;
+        const exp = currentVrm.expressionManager;
+
+        const hips = h.getNormalizedBoneNode('hips');
+        const spine = h.getNormalizedBoneNode('spine');
+        const chest = h.getNormalizedBoneNode('chest');
+        const head = h.getNormalizedBoneNode('head');
+        const leftUpperArm = h.getNormalizedBoneNode('leftUpperArm');
+        const rightUpperArm = h.getNormalizedBoneNode('rightUpperArm');
+        const leftLowerArm = h.getNormalizedBoneNode('leftLowerArm');
+        const rightLowerArm = h.getNormalizedBoneNode('rightLowerArm');
+
+        if (actionTimer > 0) {
+          actionTimer -= delta;
+          if (actionTimer <= 0) actionMode = "idle";
+        }
+        if (talkTimer > 0) talkTimer -= delta;
+
+        // 1. Breathing & Idle Sway
+        if (hips) {
+          hips.position.y = Math.sin(t * 2.2) * 0.008;
+          hips.rotation.z = Math.sin(t * 1.1) * 0.025;
+        }
+        if (spine) {
+          spine.rotation.x = Math.sin(t * 2.0) * 0.025;
+          spine.rotation.z = Math.cos(t * 1.1) * 0.02;
+        }
+        if (chest) {
+          chest.rotation.y = Math.sin(t * 0.9) * 0.04;
+        }
+        if (head) {
+          head.rotation.z = Math.sin(t * 1.3) * 0.045;
+          head.rotation.x = Math.sin(t * 1.7) * 0.03;
+          head.rotation.y = Math.sin(t * 0.7) * 0.06;
+        }
+
+        // 2. Corrected Natural Arm Rest Pose
+        if (leftUpperArm) {
+          leftUpperArm.rotation.z = 1.22 + Math.sin(t * 2.0) * 0.03;
+          leftUpperArm.rotation.x = 0.08;
+        }
+        if (leftLowerArm) {
+          leftLowerArm.rotation.z = 0.15;
+          leftLowerArm.rotation.y = 0.25;
+        }
+        if (rightUpperArm) {
+          rightUpperArm.rotation.z = -1.22 - Math.sin(t * 2.0) * 0.03;
+          rightUpperArm.rotation.x = 0.08;
+        }
+        if (rightLowerArm) {
+          rightLowerArm.rotation.z = -0.15;
+          rightLowerArm.rotation.y = -0.25;
+        }
+
+        // 3. Action Poses (Wave / Dance)
+        if (actionMode === "wave" && rightUpperArm && rightLowerArm) {
+          rightUpperArm.rotation.z = -0.35;
+          rightUpperArm.rotation.x = 0.25;
+          rightLowerArm.rotation.z = -1.1 + Math.sin(t * 10.0) * 0.35;
+          if (head) head.rotation.z = 0.12;
+        } else if (actionMode === "dance") {
+          if (hips) {
+            hips.position.y = Math.abs(Math.sin(t * 6.0)) * 0.045;
+            hips.rotation.y = Math.sin(t * 3.0) * 0.18;
+            hips.rotation.z = Math.sin(t * 3.0) * 0.08;
+          }
+          if (leftUpperArm && rightUpperArm) {
+            leftUpperArm.rotation.z = 0.85 + Math.sin(t * 6.0) * 0.25;
+            rightUpperArm.rotation.z = -0.85 - Math.cos(t * 6.0) * 0.25;
+          }
+          if (head) head.rotation.z = Math.sin(t * 3.0) * 0.12;
+        }
+
+        // 4. Facial Expressions & Lip-Sync
+        if (exp) {
+          const isHappy = (actionMode !== "idle");
+          exp.setValue('happy', isHappy ? 0.85 : 0.15);
+
+          const rawBlink = Math.max(0, Math.sin(t * 1.4) - 0.96) * 25;
+          exp.setValue('blink', isHappy ? 0.0 : Math.min(1.0, rawBlink));
+
+          if (talkTimer > 0) {
+            exp.setValue('aa', Math.abs(Math.sin(t * 13.0)) * 0.75);
+            exp.setValue('oh', Math.abs(Math.cos(t * 9.0)) * 0.35);
+          } else {
+            exp.setValue('aa', 0.0);
+            exp.setValue('oh', 0.0);
+          }
+        }
+
+        currentVrm.update(delta);
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
