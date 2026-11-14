@@ -581,4 +581,9 @@ if user_input := st.chat_input("Talk to Lily-Hime..."):
 
             speech_text = json.dumps(clean_for_speech(lily_response))
             expr_json = json.dumps(detected_expr)
-            compo
+            components.html(
+                f"<script>if (window.parent && window.parent.lilyAction) {{ window.parent.lilyAction({speech_text}, {expr_json}); }}</script>",
+                height=0
+            )
+        except Exception as e:
+            st.error(f"⚠️ API call failed: {e}")
