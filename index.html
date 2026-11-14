@@ -28,7 +28,7 @@
       transform: translateX(-50%);
       display: flex;
       gap: 6px;
-      background: rgba(255, 255, 255, 0.8);
+      background: rgba(255, 255, 255, 0.85);
       padding: 7px 10px;
       border-radius: 24px;
       box-shadow: 0 4px 15px rgba(255, 105, 180, 0.25);
@@ -61,12 +61,13 @@
   </script>
 </head>
 <body>
-  <div id="status">🌸 Summoning Lily-Hime...</div>
+  <div id="status">🌸 Summoning Lily-Hime (v2)...</div>
 
   <div class="controls">
     <button class="btn" onclick="triggerAction('wave')">👋 Wave</button>
     <button class="btn" onclick="triggerAction('happy')">😊 Happy</button>
     <button class="btn" onclick="triggerAction('dance')">💃 Dance</button>
+    <button class="btn" onclick="flipRig()">🔄 Flip Rig</button>
     <button class="btn" onclick="speakReply()">🔊 Voice</button>
   </div>
 
@@ -115,10 +116,19 @@
     let actionMode = "idle";
     let actionTimer = 0;
     let talkTimer = 0;
+    // Multiplier to instantly invert bone directions if a VRM 0.x / 1.0 rig has inverted axes
+    let dir = 1;
+
+    window.flipRig = () => {
+      dir *= -1;
+      status.style.display = 'block';
+      status.textContent = dir === 1 ? "Rig Mode: Standard (1)" : "Rig Mode: Inverted (-1)";
+      setTimeout(() => { status.style.display = 'none'; }, 2000);
+    };
 
     window.triggerAction = (mode) => {
       actionMode = mode;
-      actionTimer = 3.5;
+      actionTimer = 4.0;
     };
 
     window.speakReply = () => {
@@ -162,159 +172,21 @@
 
         if (vrm.lookAt) vrm.lookAt.target = lookAtTarget;
 
-        // Store initial hips Y so breathing animations don't collapse the model's height
+        // Detect VRM version (0.x vs 1.0) automatically
+        const isVRM0 = vrm.meta?.metaVersion === '0';
+        dir = isVRM0 ? -1 : 1;
+
         const hips = vrm.humanoid?.getNormalizedBoneNode('hips');
         if (hips) baseHipsY = hips.position.y;
 
-        // Auto-frame camera to model's head/chest height
-        const head = vrm.humanoid?.getNormalizedBoneNode('head');
-        if (head) {
-          vrm.scene.updateMatrixWorld(true);
-          const headPos = new THREE.Vector3();
-          head.getWorldPosition(headPos);
-          controls.target.set(0.0, headPos.y - 0.12, 0.0);
-          camera.position.set(0.0, headPos.y - 0.05, 2.15);
-          controls.update();
-        }
+        // Center model & frame camera using bounding box
+        vrm.scene.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(vrm.scene);
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
 
-        scene.add(vrm.scene);
-        currentVrm = vrm;
-        status.style.display = 'none';
+        vrm.scene.position.x = -center.x;
+        vrm.scene.position.z = -center.z;
 
-        if (lastReply && lastReply.length > 0) {
-          window.speakReply();
-          if (lastReply.toLowerCase().includes("konnichiwa")) {
-            window.triggerAction("wave");
-          }
-        }
-      },
-      undefined,
-      (error) => {
-        status.textContent = "⚠️ Error loading VRM";
-        console.error(error);
-      }
-    );
-
-    const clock = new THREE.Clock();
-
-    function animate() {
-      requestAnimationFrame(animate);
-      const delta = clock.getDelta();
-      const t = clock.getElapsedTime();
-
-      if (currentVrm && currentVrm.humanoid) {
-        const h = currentVrm.humanoid;
-        const exp = currentVrm.expressionManager;
-
-        const hips = h.getNormalizedBoneNode('hips');
-        const spine = h.getNormalizedBoneNode('spine');
-        const chest = h.getNormalizedBoneNode('chest');
-        const head = h.getNormalizedBoneNode('head');
-        const leftUpperArm = h.getNormalizedBoneNode('leftUpperArm');
-        const rightUpperArm = h.getNormalizedBoneNode('rightUpperArm');
-        const leftLowerArm = h.getNormalizedBoneNode('leftLowerArm');
-        const rightLowerArm = h.getNormalizedBoneNode('rightLowerArm');
-        const rightHand = h.getNormalizedBoneNode('rightHand');
-
-        if (actionTimer > 0) {
-          actionTimer -= delta;
-          if (actionTimer <= 0) actionMode = "idle";
-        }
-        if (talkTimer > 0) talkTimer -= delta;
-
-        // 1. Breathing & Idle Sway (Preserving baseHipsY)
-        if (hips) {
-          hips.position.y = baseHipsY + Math.sin(t * 2.2) * 0.008;
-          hips.rotation.y = 0;
-          hips.rotation.z = Math.sin(t * 1.1) * 0.025;
-        }
-        if (spine) {
-          spine.rotation.x = Math.sin(t * 2.0) * 0.025;
-          spine.rotation.z = Math.cos(t * 1.1) * 0.02;
-        }
-        if (chest) {
-          chest.rotation.y = Math.sin(t * 0.9) * 0.04;
-        }
-        if (head) {
-          head.rotation.z = Math.sin(t * 1.3) * 0.045;
-          head.rotation.x = Math.sin(t * 1.7) * 0.03;
-          head.rotation.y = Math.sin(t * 0.7) * 0.06;
-        }
-
-        // 2. Corrected Natural Arm Rest Pose (Three-VRM v3 Normalized Axes)
-        if (leftUpperArm) {
-          leftUpperArm.rotation.set(0.08, 0.0, -1.22 - Math.sin(t * 2.0) * 0.03);
-        }
-        if (leftLowerArm) {
-          leftLowerArm.rotation.set(0.0, -0.25, -0.15);
-        }
-        if (rightUpperArm) {
-          rightUpperArm.rotation.set(0.08, 0.0, 1.22 + Math.sin(t * 2.0) * 0.03);
-        }
-        if (rightLowerArm) {
-          rightLowerArm.rotation.set(0.0, 0.25, 0.15);
-        }
-        if (rightHand) {
-          rightHand.rotation.set(0.0, 0.0, 0.0);
-        }
-
-        // 3. Action Poses (Wave / Dance)
-        if (actionMode === "wave" && rightUpperArm && rightLowerArm) {
-          // Lift right upper arm slightly above horizontal and angle forward
-          rightUpperArm.rotation.set(0.35, 0.0, -0.35);
-          // Bend elbow upward toward head and wave forearm back and forth
-          rightLowerArm.rotation.set(0.0, 0.3, -1.25 + Math.sin(t * 10.0) * 0.35);
-          if (rightHand) {
-            rightHand.rotation.z = Math.sin(t * 10.0) * 0.25;
-          }
-          if (head) head.rotation.z = -0.12;
-        } else if (actionMode === "dance") {
-          if (hips) {
-            hips.position.y = baseHipsY + Math.abs(Math.sin(t * 6.0)) * 0.045;
-            hips.rotation.y = Math.sin(t * 3.0) * 0.18;
-            hips.rotation.z = Math.sin(t * 3.0) * 0.08;
-          }
-          if (leftUpperArm && rightUpperArm) {
-            leftUpperArm.rotation.z = -0.85 + Math.sin(t * 6.0) * 0.3;
-            rightUpperArm.rotation.z = 0.85 + Math.cos(t * 6.0) * 0.3;
-          }
-          if (leftLowerArm && rightLowerArm) {
-            leftLowerArm.rotation.z = -0.6 + Math.sin(t * 6.0) * 0.2;
-            rightLowerArm.rotation.z = 0.6 - Math.cos(t * 6.0) * 0.2;
-          }
-          if (head) head.rotation.z = Math.sin(t * 3.0) * 0.12;
-        }
-
-        // 4. Facial Expressions & Lip-Sync
-        if (exp) {
-          const isHappy = (actionMode !== "idle");
-          exp.setValue('happy', isHappy ? 0.85 : 0.15);
-
-          const rawBlink = Math.max(0, Math.sin(t * 1.4) - 0.96) * 25;
-          exp.setValue('blink', isHappy ? 0.0 : Math.min(1.0, rawBlink));
-
-          if (talkTimer > 0) {
-            exp.setValue('aa', Math.abs(Math.sin(t * 13.0)) * 0.75);
-            exp.setValue('oh', Math.abs(Math.cos(t * 9.0)) * 0.35);
-          } else {
-            exp.setValue('aa', 0.0);
-            exp.setValue('oh', 0.0);
-          }
-        }
-
-        currentVrm.update(delta);
-      }
-
-      controls.update();
-      renderer.render(scene, camera);
-    }
-    animate();
-
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-  </script>
-</body>
-</html>
+        const camY = box.min.y + size.y * 0.72;
+        controls.target.set(0.0, cam
