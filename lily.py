@@ -12,7 +12,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# Custom CSS to make the VRM iframe a full-screen background behind the chat
+# Ultra-transparent glass UI + High-contrast text (works in both Light & Dark mode)
 st.markdown("""
 <style>
   /* Make Streamlit main containers transparent so the 3D background shows through */
@@ -20,8 +20,8 @@ st.markdown("""
       background: transparent !important;
   }
 
-  /* Pin the VRM iframe to cover the entire screen in the background */
-  iframe {
+  /* Pin ONLY the 3D VRM iframe (height="800") to cover the full background */
+  iframe[height="800"] {
       position: fixed !important;
       top: 0 !important;
       left: 0 !important;
@@ -29,61 +29,88 @@ st.markdown("""
       height: 100vh !important;
       z-index: 0 !important;
       border: none !important;
+      pointer-events: auto !important;
+  }
+
+  /* Hide the tiny 0-height audio/action trigger iframe */
+  iframe[height="0"] {
+      display: none !important;
   }
 
   /* Keep the main chat container above the 3D model */
   .block-container {
       position: relative !important;
       z-index: 5 !important;
-      padding-top: 1.5rem !important;
-      max-width: 720px !important;
+      padding-top: 1rem !important;
+      max-width: 700px !important;
+      pointer-events: none !important; /* Let clicks pass through empty space to 3D buttons */
+  }
+
+  /* Re-enable clicks on actual chat elements */
+  [data-testid="stVerticalBlockBorderWrapper"],
+  [data-testid="stChatInput"],
+  .title-banner {
+      pointer-events: auto !important;
   }
 
   /* Title pill styling */
   .title-banner {
       display: inline-block;
-      background: rgba(255, 255, 255, 0.78);
-      backdrop-filter: blur(8px);
-      padding: 8px 20px;
-      border-radius: 24px;
-      border: 1px solid #ffb3d9;
-      color: #c2185b;
-      font-weight: 800;
-      font-size: 1.35rem;
-      box-shadow: 0 4px 15px rgba(255, 105, 180, 0.2);
-      margin-bottom: 10px;
-  }
-
-  /* Make the scrollable chat container slightly translucent & pushed to the lower half */
-  [data-testid="stVerticalBlockBorderWrapper"] {
-      background: rgba(255, 255, 255, 0.35) !important;
-      backdrop-filter: blur(4px) !important;
-      border-radius: 20px !important;
-      border: 1px solid rgba(255, 182, 193, 0.5) !important;
-      margin-top: 26vh !important;
-  }
-
-  /* Chat message bubbles */
-  [data-testid="stChatMessage"] {
-      background: rgba(255, 255, 255, 0.82) !important;
+      background: rgba(255, 255, 255, 0.45);
       backdrop-filter: blur(6px);
+      padding: 6px 18px;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 105, 180, 0.4);
+      color: #b01050 !important;
+      font-weight: 800;
+      font-size: 1.25rem;
+      text-shadow: 0 1px 4px rgba(255, 255, 255, 0.9);
+      margin-bottom: 6px;
+  }
+
+  /* Ultra-transparent scrollable chat container pushed to lower screen so Lily is clearly visible */
+  [data-testid="stVerticalBlockBorderWrapper"] {
+      background: rgba(255, 255, 255, 0.12) !important;
+      backdrop-filter: blur(2px) !important;
+      border-radius: 20px !important;
+      border: 1px solid rgba(255, 182, 193, 0.35) !important;
+      margin-top: 34vh !important;
+      box-shadow: 0 4px 20px rgba(255, 105, 180, 0.08) !important;
+  }
+
+  /* Ultra-transparent chat message bubbles */
+  [data-testid="stChatMessage"] {
+      background: rgba(255, 255, 255, 0.28) !important;
+      backdrop-filter: blur(4px) !important;
       border-radius: 16px !important;
-      border: 1px solid rgba(255, 182, 193, 0.6) !important;
+      border: 1px solid rgba(255, 182, 193, 0.45) !important;
       margin-bottom: 8px !important;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+      padding: 8px 12px !important;
+  }
+
+  /* Force high-contrast dark plum text so it's never white-on-pink in Dark Mode */
+  [data-testid="stChatMessage"] p,
+  [data-testid="stChatMessage"] span,
+  [data-testid="stChatMessage"] div,
+  [data-testid="stMarkdownContainer"] p {
+      color: #2b0938 !important;
+      font-weight: 600 !important;
+      text-shadow: 0px 0px 6px rgba(255, 255, 255, 0.95), 0px 1px 2px rgba(255, 255, 255, 1) !important;
   }
 
   .anime-bubble {
-      background: rgba(255, 182, 193, 0.22);
-      border-left: 4px solid #ff69b4;
-      padding: 10px 14px;
+      background: rgba(255, 240, 246, 0.32);
+      border-left: 4px solid #ff4da6;
+      padding: 8px 12px;
       border-radius: 12px;
-      color: #4a154b;
-      font-weight: 500;
+      color: #2b0938 !important;
+      font-weight: 600;
+      text-shadow: 0px 0px 6px rgba(255, 255, 255, 0.95);
   }
 
-  /* Keep bottom chat input box above the background */
-  [data-testid="stBottom"], [data-testid="stChatInput"] {
+  /* Keep bottom chat input box transparent & readable above the background */
+  [data-testid="stBottom"],
+  [data-testid="stBottom"] > div {
       z-index: 10 !important;
       background: transparent !important;
   }
@@ -117,10 +144,8 @@ def clean_for_speech(text):
     text = re.sub(r"[^\w\s,.!?'-]", "", text)
     return " ".join(text.split())
 
-def build_vrm_html(b64_vrm, last_reply=""):
-    speech = clean_for_speech(last_reply)
-    safe_speech_json = json.dumps(speech)
-
+@st.cache_data
+def build_vrm_html(b64_vrm):
     html_template = """<!DOCTYPE html>
 <html>
 <head>
@@ -154,7 +179,8 @@ def build_vrm_html(b64_vrm, last_reply=""):
       right: 16px;
       display: flex;
       gap: 6px;
-      background: rgba(255, 255, 255, 0.88);
+      background: rgba(255, 255, 255, 0.75);
+      backdrop-filter: blur(4px);
       padding: 7px 10px;
       border-radius: 24px;
       box-shadow: 0 4px 15px rgba(255, 105, 180, 0.25);
@@ -162,7 +188,7 @@ def build_vrm_html(b64_vrm, last_reply=""):
     }
     .btn {
       border: 1px solid #ffb3d9;
-      background: white;
+      background: rgba(255, 255, 255, 0.9);
       color: #c2185b;
       padding: 6px 10px;
       border-radius: 16px;
@@ -223,7 +249,7 @@ def build_vrm_html(b64_vrm, last_reply=""):
     camera.add(lookAtTarget);
 
     const b64 = "__VRM_BASE64__";
-    const lastReply = __LAST_REPLY_JSON__;
+    let lastReply = "Konnichiwa! I am Lily-Hime, your companion.";
 
     const bin = atob(b64);
     const bytes = new Uint8Array(bin.length);
@@ -241,7 +267,8 @@ def build_vrm_html(b64_vrm, last_reply=""):
       actionTimer = 3.5;
     };
 
-    window.speakReply = () => {
+    window.speakReply = (customText) => {
+      if (customText) lastReply = customText;
       const textToSay = lastReply || "Konnichiwa Master katanaking!";
       talkTimer = Math.min(7.0, Math.max(2.5, textToSay.length * 0.06));
       window.triggerAction("happy");
@@ -258,6 +285,13 @@ def build_vrm_html(b64_vrm, last_reply=""):
       }
     };
 
+    // Expose bridge to parent Streamlit window so new replies animate Lily without reloading the 3D canvas!
+    try {
+      window.parent.lilySpeak = (text) => {
+        window.speakReply(text);
+      };
+    } catch (e) {}
+
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMLoaderPlugin(parser));
 
@@ -273,11 +307,9 @@ def build_vrm_html(b64_vrm, last_reply=""):
 
         scene.add(vrm.scene);
 
-        // Save initial hip height so breathing animation doesn't drop her to the bottom
         const hips = vrm.humanoid?.getNormalizedBoneNode('hips');
         if (hips) baseHipsY = hips.position.y;
 
-        // Auto-center the model horizontally and frame her upper body in the top half
         vrm.scene.updateMatrixWorld(true);
         const box = new THREE.Box3().setFromObject(vrm.scene);
         const center = box.getCenter(new THREE.Vector3());
@@ -286,18 +318,14 @@ def build_vrm_html(b64_vrm, last_reply=""):
         vrm.scene.position.x = -center.x;
         vrm.scene.position.z = -center.z;
 
-        const focusY = box.min.y + size.y * 0.68;
+        const focusY = box.min.y + size.y * 0.66;
         controls.target.set(0.0, focusY, 0.0);
-        camera.position.set(0.0, focusY + 0.10, 2.05);
+        camera.position.set(0.0, focusY + 0.12, 2.05);
         controls.update();
 
         currentVrm = vrm;
         status.style.display = 'none';
-
-        if (lastReply && lastReply.length > 0) {
-          talkTimer = Math.min(6.0, Math.max(2.5, lastReply.length * 0.06));
-          window.triggerAction("happy");
-        }
+        window.triggerAction("happy");
       },
       undefined,
       (err) => {
@@ -332,7 +360,7 @@ def build_vrm_html(b64_vrm, last_reply=""):
         }
         if (talkTimer > 0) talkTimer -= delta;
 
-        // 1. Breathing & Idle Sway (Preserving baseHipsY)
+        // 1. Breathing & Idle Sway
         if (hips) {
           hips.position.y = baseHipsY + Math.sin(t * 2.2) * 0.008;
           hips.rotation.y = 0;
@@ -429,12 +457,17 @@ def build_vrm_html(b64_vrm, last_reply=""):
   </script>
 </body>
 </html>"""
+    return html_template.replace("__VRM_BASE64__", b64_vrm)
 
-    html_template = html_template.replace("__VRM_BASE64__", b64_vrm)
-    html_template = html_template.replace("__LAST_REPLY_JSON__", safe_speech_json)
-    return html_template
+# --- 1. RENDER PERSISTENT 3D BACKGROUND FIRST (Loads once, never reloads on chat!) ---
+vrm_b64 = load_vrm_b64("lily_model.vrm")
+if vrm_b64:
+    viewer_html = build_vrm_html(vrm_b64)
+    components.html(viewer_html, height=800, scrolling=False)
+else:
+    st.error("⚠️ lily_model.vrm not found at repo root.")
 
-# --- CHAT INTERFACE ---
+# --- 2. TRANSPARENT CHAT OVERLAY ---
 st.markdown('<div class="title-banner">🦊 Lily-Hime\'s Room 🌸</div>', unsafe_allow_html=True)
 
 SYSTEM_PROMPT = (
@@ -452,7 +485,7 @@ if "messages" not in st.session_state:
         }
     ]
 
-chat_box = st.container(height=320)
+chat_box = st.container(height=270)
 with chat_box:
     for message in st.session_state.messages:
         if message["role"] == "system":
@@ -474,29 +507,40 @@ if user_input := st.chat_input("Talk to Lily-Hime..."):
         )
         try:
             with st.chat_message("assistant", avatar=avatar_img):
-                response = client.chat.completions.create(
+                msg_placeholder = st.empty()
+                # Immediate thinking indicator so there's zero blank delay
+                msg_placeholder.markdown('<div class="anime-bubble">🌸 <i>Lily-Hime is thinking...</i></div>', unsafe_allow_html=True)
+
+                stream = client.chat.completions.create(
                     model=MODEL_NAME,
                     messages=st.session_state.messages,
-                    max_tokens=150
+                    max_tokens=150,
+                    stream=True
                 )
-                lily_response = response.choices[0].message.content
-                bubble = f'<div class="anime-bubble">{lily_response}</div>'
-                st.markdown(bubble, unsafe_allow_html=True)
+
+                lily_response = ""
+                for chunk in stream:
+                    delta_text = chunk.choices[0].delta.content or ""
+                    lily_response += delta_text
+                    msg_placeholder.markdown(
+                        f'<div class="anime-bubble">{lily_response}▌</div>',
+                        unsafe_allow_html=True
+                    )
+
+                msg_placeholder.markdown(
+                    f'<div class="anime-bubble">{lily_response}</div>',
+                    unsafe_allow_html=True
+                )
+
             st.session_state.messages.append(
                 {"role": "assistant", "content": lily_response}
             )
+
+            # Trigger Lily's lip-sync and voice without reloading the 3D VRM iframe
+            speech_text = json.dumps(clean_for_speech(lily_response))
+            components.html(
+                f"<script>if (window.parent && window.parent.lilySpeak) {{ window.parent.lilySpeak({speech_text}); }}</script>",
+                height=0
+            )
         except Exception as e:
             st.error(f"⚠️ API call failed: {e}")
-
-# --- 3D BACKGROUND VIEWER ---
-vrm_b64 = load_vrm_b64("lily_model.vrm")
-last_msg = ""
-if "messages" in st.session_state and len(st.session_state.messages) > 0:
-    if st.session_state.messages[-1]["role"] == "assistant":
-        last_msg = st.session_state.messages[-1]["content"]
-
-if vrm_b64:
-    viewer_html = build_vrm_html(vrm_b64, last_msg)
-    components.html(viewer_html, height=800, scrolling=False)
-else:
-    st.error("⚠️ lily_model.vrm not found at repo root.")
