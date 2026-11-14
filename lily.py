@@ -12,7 +12,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# Ultra-transparent glass UI + High-contrast text (works in both Light & Dark mode)
+# Ultra-transparent glass UI with buttons safely tucked on the side
 st.markdown("""
 <style>
   /* Make Streamlit main containers transparent so the 3D background shows through */
@@ -20,7 +20,7 @@ st.markdown("""
       background: transparent !important;
   }
 
-  /* Pin ONLY the 3D VRM iframe (height="800") to cover the full background */
+  /* Pin ONLY the 3D VRM iframe to cover the full background */
   iframe[height="800"] {
       position: fixed !important;
       top: 0 !important;
@@ -32,7 +32,7 @@ st.markdown("""
       pointer-events: auto !important;
   }
 
-  /* Hide the tiny 0-height audio/action trigger iframe */
+  /* Hide tiny action triggers */
   iframe[height="0"] {
       display: none !important;
   }
@@ -43,7 +43,7 @@ st.markdown("""
       z-index: 5 !important;
       padding-top: 1rem !important;
       max-width: 700px !important;
-      pointer-events: none !important; /* Let clicks pass through empty space to 3D buttons */
+      pointer-events: none !important;
   }
 
   /* Re-enable clicks on actual chat elements */
@@ -68,13 +68,13 @@ st.markdown("""
       margin-bottom: 6px;
   }
 
-  /* Ultra-transparent scrollable chat container pushed to lower screen so Lily is clearly visible */
+  /* Ultra-transparent scrollable chat container pushed to lower screen */
   [data-testid="stVerticalBlockBorderWrapper"] {
       background: rgba(255, 255, 255, 0.12) !important;
       backdrop-filter: blur(2px) !important;
       border-radius: 20px !important;
       border: 1px solid rgba(255, 182, 193, 0.35) !important;
-      margin-top: 34vh !important;
+      margin-top: 36vh !important;
       box-shadow: 0 4px 20px rgba(255, 105, 180, 0.08) !important;
   }
 
@@ -88,7 +88,7 @@ st.markdown("""
       padding: 8px 12px !important;
   }
 
-  /* Force high-contrast dark plum text so it's never white-on-pink in Dark Mode */
+  /* High-contrast readable text */
   [data-testid="stChatMessage"] p,
   [data-testid="stChatMessage"] span,
   [data-testid="stChatMessage"] div,
@@ -108,7 +108,6 @@ st.markdown("""
       text-shadow: 0px 0px 6px rgba(255, 255, 255, 0.95);
   }
 
-  /* Keep bottom chat input box transparent & readable above the background */
   [data-testid="stBottom"],
   [data-testid="stBottom"] > div {
       z-index: 10 !important;
@@ -173,28 +172,32 @@ def build_vrm_html(b64_vrm):
       font-weight: bold;
       z-index: 20;
     }
+    /* Side Control Bar tucked neatly on the top-right so it never blocks her face */
     .controls {
       position: absolute;
-      top: 60px;
+      top: 16px;
       right: 16px;
       display: flex;
+      flex-direction: column;
       gap: 6px;
-      background: rgba(255, 255, 255, 0.75);
-      backdrop-filter: blur(4px);
-      padding: 7px 10px;
-      border-radius: 24px;
-      box-shadow: 0 4px 15px rgba(255, 105, 180, 0.25);
+      background: rgba(255, 255, 255, 0.82);
+      backdrop-filter: blur(6px);
+      padding: 10px;
+      border-radius: 18px;
+      box-shadow: 0 4px 20px rgba(255, 105, 180, 0.3);
       z-index: 20;
     }
     .btn {
       border: 1px solid #ffb3d9;
-      background: rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.95);
       color: #c2185b;
-      padding: 6px 10px;
-      border-radius: 16px;
-      font-size: 12px;
-      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 14px;
+      font-size: 11px;
+      font-weight: 700;
       cursor: pointer;
+      text-align: left;
+      white-space: nowrap;
     }
     .btn:active { background: #ff69b4; color: white; }
   </style>
@@ -211,9 +214,11 @@ def build_vrm_html(b64_vrm):
 <body>
   <div id="status">🌸 Summoning Lily-Hime...</div>
   <div class="controls">
-    <button class="btn" onclick="triggerAction('happy')">😊 Happy</button>
-    <button class="btn" onclick="triggerAction('nod')">🙇‍♀️ Nod</button>
-    <button class="btn" onclick="triggerAction('dance')">💃 Dance</button>
+    <button class="btn" onclick="triggerExpression('happy')">😊 Happy</button>
+    <button class="btn" onclick="triggerExpression('blush')">😳 Blush</button>
+    <button class="btn" onclick="triggerExpression('angry')">💢 Angry</button>
+    <button class="btn" onclick="triggerExpression('sad')">💧 Sad/Cry</button>
+    <button class="btn" onclick="triggerExpression('dance')">💃 Dance</button>
     <button class="btn" onclick="speakReply()">🔊 Voice</button>
   </div>
   <script type="module">
@@ -258,20 +263,26 @@ def build_vrm_html(b64_vrm):
 
     let currentVrm = null;
     let baseHipsY = 0;
-    let actionMode = "idle";
+    let currentMode = "happy";
     let actionTimer = 0;
     let talkTimer = 0;
 
-    window.triggerAction = (mode) => {
-      actionMode = mode;
-      actionTimer = 3.5;
+    window.triggerExpression = (mode, customText) => {
+      currentMode = mode;
+      actionTimer = 4.0;
+      if (customText) lastReply = customText;
     };
 
-    window.speakReply = (customText) => {
-      if (customText) lastReply = customText;
-      const textToSay = lastReply || "Konnichiwa Master katanaking!";
+    window.speakReply = (customText, expr) => {
+      if (expr) {
+        currentMode = expr;
+      } else {
+        currentMode = "happy";
+      }
+      actionTimer = 5.0;
+
+      const textToSay = customText || lastReply || "Konnichiwa Master katanaking!";
       talkTimer = Math.min(7.0, Math.max(2.5, textToSay.length * 0.06));
-      window.triggerAction("happy");
 
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
@@ -285,10 +296,9 @@ def build_vrm_html(b64_vrm):
       }
     };
 
-    // Expose bridge to parent Streamlit window so new replies animate Lily without reloading the 3D canvas!
     try {
-      window.parent.lilySpeak = (text) => {
-        window.speakReply(text);
+      window.parent.lilyAction = (text, expr) => {
+        window.speakReply(text, expr);
       };
     } catch (e) {}
 
@@ -325,7 +335,7 @@ def build_vrm_html(b64_vrm):
 
         currentVrm = vrm;
         status.style.display = 'none';
-        window.triggerAction("happy");
+        window.triggerExpression("happy");
       },
       undefined,
       (err) => {
@@ -356,7 +366,7 @@ def build_vrm_html(b64_vrm):
 
         if (actionTimer > 0) {
           actionTimer -= delta;
-          if (actionTimer <= 0) actionMode = "idle";
+          if (actionTimer <= 0) currentMode = "happy";
         }
         if (talkTimer > 0) talkTimer -= delta;
 
@@ -379,39 +389,30 @@ def build_vrm_html(b64_vrm):
 
         // 2. Relaxed Natural Arm Rest Pose
         if (leftUpperArm) {
-          leftUpperArm.rotation.z = 1.15 + Math.sin(t * 2.0) * 0.03;
-          leftUpperArm.rotation.x = 0.08;
+          leftUpperArm.rotation.set(0.08, 0.0, 1.15 + Math.sin(t * 2.0) * 0.03);
         }
         if (leftLowerArm) {
-          leftLowerArm.rotation.z = 0.15;
-          leftLowerArm.rotation.y = 0.2;
+          leftLowerArm.rotation.set(0.0, 0.25, 0.15);
         }
         if (rightUpperArm) {
-          rightUpperArm.rotation.z = -1.15 - Math.sin(t * 2.0) * 0.03;
-          rightUpperArm.rotation.x = 0.08;
+          rightUpperArm.rotation.set(0.08, 0.0, -1.15 - Math.sin(t * 2.0) * 0.03);
         }
         if (rightLowerArm) {
-          rightLowerArm.rotation.z = -0.15;
-          rightLowerArm.rotation.y = -0.2;
+          rightLowerArm.rotation.set(0.0, -0.25, -0.15);
         }
 
-        // 3. Cute Non-Arm Actions (Happy Bounce, Polite Nod, Dance Sway)
-        if (actionMode === "happy") {
-          if (hips) {
-            hips.position.y = baseHipsY + Math.abs(Math.sin(t * 5.5)) * 0.025;
-          }
-          if (head) {
-            head.rotation.z = 0.14;
-            head.rotation.x = Math.sin(t * 5.5) * 0.05;
-          }
-        } else if (actionMode === "nod") {
-          if (spine) {
-            spine.rotation.x = Math.abs(Math.sin(t * 4.5)) * 0.12;
-          }
-          if (head) {
-            head.rotation.x = Math.abs(Math.sin(t * 4.5)) * 0.18;
-          }
-        } else if (actionMode === "dance") {
+        // 3. Dynamic Expression & Movement States
+        if (currentMode === "happy") {
+          if (hips) hips.position.y = baseHipsY + Math.abs(Math.sin(t * 5.5)) * 0.025;
+          if (head) { head.rotation.z = 0.14; head.rotation.x = Math.sin(t * 5.5) * 0.05; }
+        } else if (currentMode === "blush") {
+          if (head) { head.rotation.z = -0.1; head.rotation.x = 0.08; }
+        } else if (currentMode === "angry") {
+          if (spine) spine.rotation.x = -0.05;
+          if (head) { head.rotation.x = -0.1; head.rotation.z = 0.0; }
+        } else if (currentMode === "sad") {
+          if (head) { head.rotation.x = 0.15; head.rotation.z = 0.08; }
+        } else if (currentMode === "dance") {
           if (hips) {
             hips.position.y = baseHipsY + Math.abs(Math.sin(t * 6.0)) * 0.045;
             hips.rotation.y = Math.sin(t * 3.0) * 0.18;
@@ -424,14 +425,33 @@ def build_vrm_html(b64_vrm):
           if (head) head.rotation.z = Math.sin(t * 3.0) * 0.12;
         }
 
-        // 4. Facial Expressions & Lip-Sync
+        // 4. Facial Expressions & Lip-Sync Mapping
         if (exp) {
-          const isHappy = (actionMode !== "idle");
-          exp.setValue('happy', isHappy ? 0.85 : 0.15);
+          // Reset expressions first
+          exp.setValue('happy', 0.0);
+          exp.setValue('angry', 0.0);
+          exp.setValue('sad', 0.0);
+          exp.setValue('relaxed', 0.0);
+          exp.setValue('surprised', 0.0);
 
+          if (currentMode === "happy") {
+            exp.setValue('happy', 0.9);
+          } else if (currentMode === "blush") {
+            exp.setValue('happy', 0.7);
+            exp.setValue('relaxed', 0.5);
+          } else if (currentMode === "angry") {
+            exp.setValue('angry', 0.85);
+          } else if (currentMode === "sad") {
+            exp.setValue('sad', 0.85);
+          } else {
+            exp.setValue('happy', 0.4);
+          }
+
+          // Blinking
           const rawBlink = Math.max(0, Math.sin(t * 1.4) - 0.96) * 25;
-          exp.setValue('blink', isHappy ? 0.0 : Math.min(1.0, rawBlink));
+          exp.setValue('blink', currentMode === "angry" ? 0.2 : Math.min(1.0, rawBlink));
 
+          // Lip-sync when talking
           if (talkTimer > 0) {
             exp.setValue('aa', Math.abs(Math.sin(t * 13.0)) * 0.75);
             exp.setValue('oh', Math.abs(Math.cos(t * 9.0)) * 0.35);
@@ -459,7 +479,7 @@ def build_vrm_html(b64_vrm):
 </html>"""
     return html_template.replace("__VRM_BASE64__", b64_vrm)
 
-# --- 1. RENDER PERSISTENT 3D BACKGROUND FIRST (Loads once, never reloads on chat!) ---
+# --- 1. RENDER PERSISTENT 3D BACKGROUND FIRST ---
 vrm_b64 = load_vrm_b64("lily_model.vrm")
 if vrm_b64:
     viewer_html = build_vrm_html(vrm_b64)
@@ -472,7 +492,7 @@ st.markdown('<div class="title-banner">🦊 Lily-Hime\'s Room 🌸</div>', unsaf
 
 SYSTEM_PROMPT = (
     "Your name is Lily-Hime. You are a cheerful, sweet, anime girl character. "
-    "You speak using text emojis like (✿◠‿◠) and cute expressions. "
+    "You speak using text emojis like (✿◠‿◠) and actions like *blushes*, *smiles*, *gets angry*, or *feels sad*. "
     "You were built entirely by katanaking! Proudly boast that katanaking created you!"
 )
 
@@ -508,7 +528,6 @@ if user_input := st.chat_input("Talk to Lily-Hime..."):
         try:
             with st.chat_message("assistant", avatar=avatar_img):
                 msg_placeholder = st.empty()
-                # Immediate thinking indicator so there's zero blank delay
                 msg_placeholder.markdown('<div class="anime-bubble">🌸 <i>Lily-Hime is thinking...</i></div>', unsafe_allow_html=True)
 
                 stream = client.chat.completions.create(
@@ -536,10 +555,20 @@ if user_input := st.chat_input("Talk to Lily-Hime..."):
                 {"role": "assistant", "content": lily_response}
             )
 
-            # Trigger Lily's lip-sync and voice without reloading the 3D VRM iframe
+            # Smart Sentiment & Expression detector for Lily's 3D face
+            lower_res = lily_response.lower()
+            detected_expr = "happy"
+            if any(w in lower_res for w in ["blush", "shy", "cute", "flustered", "ehe"]):
+                detected_expr = "blush"
+            elif any(w in lower_res for w in ["angry", "mad", "hmph", "baka", "frown"]):
+                detected_expr = "angry"
+            elif any(w in lower_res for w in ["sad", "cry", "sob", "gomen", "sorry", "lonely"]):
+                detected_expr = "sad"
+
             speech_text = json.dumps(clean_for_speech(lily_response))
+            expr_json = json.dumps(detected_expr)
             components.html(
-                f"<script>if (window.parent && window.parent.lilySpeak) {{ window.parent.lilySpeak({speech_text}); }}</script>",
+                f"<script>if (window.parent && window.parent.lilyAction) {{ window.parent.lilyAction({speech_text}, {expr_json}); }}</script>",
                 height=0
             )
         except Exception as e:
