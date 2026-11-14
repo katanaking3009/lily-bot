@@ -1,12 +1,25 @@
 import streamlit as st
 import streamlit.components.v1 as components
 from groq import Groq
+import base64
 import os
 
 # ==========================================
 # 1. SETUP & AUTHENTICATION
 # ==========================================
 st.set_page_config(page_title="Lily-Hime AI 🌸", page_icon="🌸", layout="wide")
+
+# Optional styling for your anime-bubble class
+st.markdown("""
+<style>
+.anime-bubble {
+    background: rgba(255, 182, 193, 0.18);
+    border-left: 4px solid #ff69b4;
+    padding: 10px 14px;
+    border-radius: 12px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # Make sure the key is loaded correctly
 try:
@@ -20,6 +33,27 @@ except Exception:
 
 MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
+
+# Load character.png as chat avatar if present in repo
+avatar_img = "character.png" if os.path.exists("character.png") else "🌸"
+
+# Cache the 3D viewer HTML so it doesn't re-encode on every chat message
+@st.cache_data
+def get_vrm_viewer_html(html_path="index.html", vrm_path="lily_model.vrm"):
+    with open(html_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+
+    if os.path.exists(vrm_path):
+        with open(vrm_path, "rb") as f:
+            b64_vrm = base64.b64encode(f.read()).decode("utf-8")
+        
+        # Supports both the __VRM_BASE64__ placeholder and direct file references
+        data_uri = f"data:application/octet-stream;base64,{b64_vrm}"
+        html_content = html_content.replace("__VRM_BASE64__", b64_vrm)
+        html_content = html_content.replace("./lily_model.vrm", data_uri)
+        html_content = html_content.replace("lily_model.vrm", data_uri)
+
+    return html_content
 
 # ==========================================
 # 2. DIVISION COLUMNS & CHAT WINDOW
@@ -40,46 +74,12 @@ with chat_column:
             {"role": "assistant", "content": "Konnichiwa! 🌸 I am Lily-Hime, your companion. What shall we talk about today, Master katanaking? (✿◠‿◠)"}
         ]
 
-    for message in st.session_state.messages:
-        if message["role"] == "system":
-            continue
-        with st.chat_message(message["role"]):
-            if message["role"] == "assistant":
-                st.markdown(f'<div class="anime-bubble">{message["content"]}</div>', unsafe_allow_html=True)
-            else:
-                st.markdown(message["content"])
-
-    if user_input := st.chat_input("Talk to Lily-Hime..."):
-        with st.chat_message("user"):
-            st.markdown(user_input)
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        try:
-            with st.chat_message("assistant"):
-                response = client.chat.completions.create(
-                    model=MODEL_NAME,
-                    messages=st.session_state.messages,
-                    max_tokens=150
-                )
-                lily_response = response.choices[0].message.content
-                st.markdown(f'<div class="anime-bubble">{lily_response}</div>', unsafe_allow_html=True)
-            st.session_state.messages.append({"role": "assistant", "content": lily_response})
-        except Exception as e:
-            st.error(f"⚠️ API call failed: {e}")
-
-# ==========================================
-# 3. EMBED 3D MODEL VIEWER
-# ==========================================
-with model_column:
-    st.write("### ✨ Lily-Hime 3D Avatar Viewer")
-
-    html_path = "index.html"  # must be at repo root
-
-    if os.path.exists(html_path):
-        with open(html_path, "r", encoding="utf-8") as f:
-            html_content = f.read()
-        # ✅ Use components.html to embed VRM viewer
-        components.html(html_content, height=600, scrolling=False)
-    else:
-        st.error("⚠️ index.html not found at repo root. Please place it next to lily.py.")
-        # ✅ Fallback to GitHub Pages iframe
-        components.iframe("https://katanaking3009.github.io/lily-bot/", height=600)
+    # Scrollable chat box so the page stays aligned with the 3D model
+    chat_box = st.container(height=480)
+    with chat_box:
+        for message in st.session_state.messages:
+            if message["role"] == "system":
+                continue
+            icon = avatar_img if message["role"] == "assistant" else None
+            with st.chat_message(message["role"], avatar=icon
+ 
