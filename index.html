@@ -61,10 +61,9 @@
   </script>
 </head>
 <body>
-  <div id="status">🌸 Summoning Lily-Hime (v2)...</div>
+  <div id="status">🌸 Summoning Lily-Hime...</div>
 
   <div class="controls">
-    <button class="btn" onclick="triggerAction('wave')">👋 Wave</button>
     <button class="btn" onclick="triggerAction('happy')">😊 Happy</button>
     <button class="btn" onclick="triggerAction('dance')">💃 Dance</button>
     <button class="btn" onclick="flipRig()">🔄 Flip Rig</button>
@@ -116,7 +115,6 @@
     let actionMode = "idle";
     let actionTimer = 0;
     let talkTimer = 0;
-    // Multiplier to instantly invert bone directions if a VRM 0.x / 1.0 rig has inverted axes
     let dir = 1;
 
     window.flipRig = () => {
@@ -166,27 +164,4 @@
       blobUrl,
       (gltf) => {
         const vrm = gltf.userData.vrm;
-        VRMUtils.removeUnnecessaryVertices(gltf.scene);
-        VRMUtils.rotateVRM0(vrm);
-        vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
-
-        if (vrm.lookAt) vrm.lookAt.target = lookAtTarget;
-
-        // Detect VRM version (0.x vs 1.0) automatically
-        const isVRM0 = vrm.meta?.metaVersion === '0';
-        dir = isVRM0 ? -1 : 1;
-
-        const hips = vrm.humanoid?.getNormalizedBoneNode('hips');
-        if (hips) baseHipsY = hips.position.y;
-
-        // Center model & frame camera using bounding box
-        vrm.scene.updateMatrixWorld(true);
-        const box = new THREE.Box3().setFromObject(vrm.scene);
-        const size = box.getSize(new THREE.Vector3());
-        const center = box.getCenter(new THREE.Vector3());
-
-        vrm.scene.position.x = -center.x;
-        vrm.scene.position.z = -center.z;
-
-        const camY = box.min.y + size.y * 0.72;
-        controls.target.set(0.0, cam
+        VRMUtils.removeUn
