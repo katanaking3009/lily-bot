@@ -4,6 +4,7 @@ from groq import Groq
 import base64
 import os
 import re
+import json
 
 st.set_page_config(
     page_title="Lily-Hime AI 🌸",
@@ -50,8 +51,10 @@ def clean_for_speech(text):
     return " ".join(text.split())
 
 def build_vrm_html(b64_vrm, last_reply=""):
-    speech = clean_for_speech(last_reply).replace("\\", "").replace('"', "'")
-    return """<!DOCTYPE html>
+    speech = clean_for_speech(last_reply)
+    safe_speech_json = json.dumps(speech)
+    
+    html_template = """<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -145,132 +148,4 @@ def build_vrm_html(b64_vrm, last_reply=""):
     scene.add(dirLight);
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 
-    const b64 = '""" + b64_vrm + """';
-    const lastReply = \"""" + speech + """\";
-
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
-
-    let currentVrm = null;
-    let actionMode = "idle";
-    let actionTimer = 0;
-    let talkTimer = 0;
-
-    window.triggerAction = (mode) => {
-      actionMode = mode;
-      actionTimer = 3.5;
-    };
-
-    window.speakReply = () => {
-      const textToSay = lastReply || "Konnichiwa Master katanaking!";
-      talkTimer = Math.min(7.0, Math.max(2.5, textToSay.length * 0.06));
-      window.triggerAction("happy");
-
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(textToSay);
-        utter.pitch = 1.4;
-        utter.rate = 1.05;
-        utter.onstart = () => { talkTimer = 12.0; };
-        utter.onend = () => { talkTimer = 0.0; };
-        utter.onerror = () => { talkTimer = 0.0; };
-        window.speechSynthesis.speak(utter);
-      }
-    };
-
-    const loader = new GLTFLoader();
-    loader.register((parser) => new VRMLoaderPlugin(parser));
-
-    loader.load(
-      blobUrl,
-      (gltf) => {
-        const vrm = gltf.userData.vrm;
-        VRMUtils.removeUnnecessaryVertices(gltf.scene);
-        VRMUtils.rotateVRM0(vrm);
-        vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
-
-        scene.add(vrm.scene);
-        currentVrm = vrm;
-        status.style.display = 'none';
-
-        if (lastReply && lastReply.length > 0) {
-          talkTimer = Math.min(6.0, Math.max(2.5, lastReply.length * 0.06));
-          if (lastReply.toLowerCase().includes("konnichiwa")) {
-            window.triggerAction("wave");
-          } else {
-            window.triggerAction("happy");
-          }
-        }
-      },
-      undefined,
-      (err) => {
-        status.textContent = "⚠️ Error loading VRM";
-        console.error(err);
-      }
-    );
-
-    const clock = new THREE.Clock();
-
-    function animate() {
-      requestAnimationFrame(animate);
-      const delta = clock.getDelta();
-      const t = clock.getElapsedTime();
-
-      if (currentVrm && currentVrm.humanoid) {
-        const h = currentVrm.humanoid;
-        const exp = currentVrm.expressionManager;
-
-        const hips = h.getNormalizedBoneNode('hips');
-        const spine = h.getNormalizedBoneNode('spine');
-        const chest = h.getNormalizedBoneNode('chest');
-        const head = h.getNormalizedBoneNode('head');
-        const leftUpperArm = h.getNormalizedBoneNode('leftUpperArm');
-        const rightUpperArm = h.getNormalizedBoneNode('rightUpperArm');
-        const leftLowerArm = h.getNormalizedBoneNode('leftLowerArm');
-        const rightLowerArm = h.getNormalizedBoneNode('rightLowerArm');
-
-        if (actionTimer > 0) {
-          actionTimer -= delta;
-          if (actionTimer <= 0) actionMode = "idle";
-        }
-        if (talkTimer > 0) talkTimer -= delta;
-
-        if (hips) {
-          hips.position.y = Math.sin(t * 2.2) * 0.008;
-          hips.rotation.z = Math.sin(t * 1.1) * 0.025;
-        }
-        if (spine) {
-          spine.rotation.x = Math.sin(t * 2.0) * 0.025;
-          spine.rotation.z = Math.cos(t * 1.1) * 0.02;
-        }
-        if (chest) chest.rotation.y = Math.sin(t * 0.9) * 0.04;
-        if (head) {
-          head.rotation.z = Math.sin(t * 1.3) * 0.045;
-          head.rotation.x = Math.sin(t * 1.7) * 0.03;
-          head.rotation.y = Math.sin(t * 0.7) * 0.06;
-        }
-
-        // Fixed arm rotation (try -1.22 / 1.22 or 0.0 if rig is already A-pose)
-        if (leftUpperArm) {
-          leftUpperArm.rotation.z = 1.15 + Math.sin(t * 2.0) * 0.03;
-          leftUpperArm.rotation.x = 0.08;
-        }
-        if (leftLowerArm) {
-          leftLowerArm.rotation.z = 0.15;
-          leftLowerArm.rotation.y = 0.2;
-        }
-        if (rightUpperArm) {
-          rightUpperArm.rotation.z = -1.15 - Math.sin(t * 2.0) * 0.03;
-          rightUpperArm.rotation.x = 0.08;
-        }
-        if (rightLowerArm) {
-          rightLowerArm.rotation.z = -0.15;
-          rightLowerArm.rotation.y = -0.2;
-        }
-
-        if (actionMode === "wave" && rightUpperArm && rightLowerArm) {
-          rightUpperArm.rotation.z = -0.35;
-          rightUpperArm.rotation.x = 0.25;
-          rightLowerArm.rotation.z = -1.0 + Math.sin(t * 10.0) * 0
+    const b64 = "__VRM
