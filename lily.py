@@ -9,17 +9,84 @@ import json
 st.set_page_config(
     page_title="Lily-Hime AI 🌸",
     page_icon="🌸",
-    layout="wide"
+    layout="centered"
 )
 
+# Custom CSS to make the VRM iframe a full-screen background behind the chat
 st.markdown("""
 <style>
-.anime-bubble {
-    background: rgba(255, 182, 193, 0.18);
-    border-left: 4px solid #ff69b4;
-    padding: 10px 14px;
-    border-radius: 12px;
-}
+  /* Make Streamlit main containers transparent so the 3D background shows through */
+  .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
+      background: transparent !important;
+  }
+
+  /* Pin the VRM iframe to cover the entire screen in the background */
+  iframe {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 0 !important;
+      border: none !important;
+  }
+
+  /* Keep the main chat container above the 3D model */
+  .block-container {
+      position: relative !important;
+      z-index: 5 !important;
+      padding-top: 1.5rem !important;
+      max-width: 720px !important;
+  }
+
+  /* Title pill styling */
+  .title-banner {
+      display: inline-block;
+      background: rgba(255, 255, 255, 0.78);
+      backdrop-filter: blur(8px);
+      padding: 8px 20px;
+      border-radius: 24px;
+      border: 1px solid #ffb3d9;
+      color: #c2185b;
+      font-weight: 800;
+      font-size: 1.35rem;
+      box-shadow: 0 4px 15px rgba(255, 105, 180, 0.2);
+      margin-bottom: 10px;
+  }
+
+  /* Make the scrollable chat container slightly translucent & pushed to the lower half */
+  [data-testid="stVerticalBlockBorderWrapper"] {
+      background: rgba(255, 255, 255, 0.35) !important;
+      backdrop-filter: blur(4px) !important;
+      border-radius: 20px !important;
+      border: 1px solid rgba(255, 182, 193, 0.5) !important;
+      margin-top: 26vh !important;
+  }
+
+  /* Chat message bubbles */
+  [data-testid="stChatMessage"] {
+      background: rgba(255, 255, 255, 0.82) !important;
+      backdrop-filter: blur(6px);
+      border-radius: 16px !important;
+      border: 1px solid rgba(255, 182, 193, 0.6) !important;
+      margin-bottom: 8px !important;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
+  }
+
+  .anime-bubble {
+      background: rgba(255, 182, 193, 0.22);
+      border-left: 4px solid #ff69b4;
+      padding: 10px 14px;
+      border-radius: 12px;
+      color: #4a154b;
+      font-weight: 500;
+  }
+
+  /* Keep bottom chat input box above the background */
+  [data-testid="stBottom"], [data-testid="stChatInput"] {
+      z-index: 10 !important;
+      background: transparent !important;
+  }
 </style>
 """, unsafe_allow_html=True)
 
@@ -53,42 +120,45 @@ def clean_for_speech(text):
 def build_vrm_html(b64_vrm, last_reply=""):
     speech = clean_for_speech(last_reply)
     safe_speech_json = json.dumps(speech)
-    
+
     html_template = """<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <style>
-    body {
+    html, body {
       margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
       overflow: hidden;
-      background: radial-gradient(circle at 50% 35%, #fff0f6 0%, #ffd6e7 100%);
+      background: radial-gradient(circle at 50% 30%, #fff0f6 0%, #ffd6e7 100%);
       font-family: sans-serif;
     }
-    canvas { width: 100vw; height: 100vh; display: block; }
+    canvas { width: 100vw !important; height: 100vh !important; display: block; }
     #status {
       position: absolute;
-      top: 12px;
-      left: 12px;
+      top: 16px;
+      left: 16px;
       background: rgba(255, 255, 255, 0.85);
       color: #d63384;
       padding: 6px 12px;
       border-radius: 20px;
       font-size: 13px;
       font-weight: bold;
+      z-index: 20;
     }
     .controls {
       position: absolute;
-      bottom: 14px;
-      left: 50%;
-      transform: translateX(-50%);
+      top: 60px;
+      right: 16px;
       display: flex;
       gap: 6px;
-      background: rgba(255, 255, 255, 0.85);
+      background: rgba(255, 255, 255, 0.88);
       padding: 7px 10px;
       border-radius: 24px;
       box-shadow: 0 4px 15px rgba(255, 105, 180, 0.25);
-      z-index: 10;
+      z-index: 20;
     }
     .btn {
       border: 1px solid #ffb3d9;
@@ -115,8 +185,8 @@ def build_vrm_html(b64_vrm, last_reply=""):
 <body>
   <div id="status">🌸 Summoning Lily-Hime...</div>
   <div class="controls">
-    <button class="btn" onclick="triggerAction('wave')">👋 Wave</button>
     <button class="btn" onclick="triggerAction('happy')">😊 Happy</button>
+    <button class="btn" onclick="triggerAction('nod')">🙇‍♀️ Nod</button>
     <button class="btn" onclick="triggerAction('dance')">💃 Dance</button>
     <button class="btn" onclick="speakReply()">🔊 Voice</button>
   </div>
@@ -140,6 +210,7 @@ def build_vrm_html(b64_vrm, last_reply=""):
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(0.0, 1.22, 0.0);
     controls.enableDamping = true;
+    controls.enableZoom = false;
     controls.update();
 
     const scene = new THREE.Scene();
@@ -147,6 +218,9 @@ def build_vrm_html(b64_vrm, last_reply=""):
     dirLight.position.set(1.0, 1.5, 1.5);
     scene.add(dirLight);
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+
+    const lookAtTarget = new THREE.Object3D();
+    camera.add(lookAtTarget);
 
     const b64 = "__VRM_BASE64__";
     const lastReply = __LAST_REPLY_JSON__;
@@ -157,6 +231,7 @@ def build_vrm_html(b64_vrm, last_reply=""):
     const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
 
     let currentVrm = null;
+    let baseHipsY = 0;
     let actionMode = "idle";
     let actionTimer = 0;
     let talkTimer = 0;
@@ -194,17 +269,34 @@ def build_vrm_html(b64_vrm, last_reply=""):
         VRMUtils.rotateVRM0(vrm);
         vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
 
+        if (vrm.lookAt) vrm.lookAt.target = lookAtTarget;
+
         scene.add(vrm.scene);
+
+        // Save initial hip height so breathing animation doesn't drop her to the bottom
+        const hips = vrm.humanoid?.getNormalizedBoneNode('hips');
+        if (hips) baseHipsY = hips.position.y;
+
+        // Auto-center the model horizontally and frame her upper body in the top half
+        vrm.scene.updateMatrixWorld(true);
+        const box = new THREE.Box3().setFromObject(vrm.scene);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+
+        vrm.scene.position.x = -center.x;
+        vrm.scene.position.z = -center.z;
+
+        const focusY = box.min.y + size.y * 0.68;
+        controls.target.set(0.0, focusY, 0.0);
+        camera.position.set(0.0, focusY + 0.10, 2.05);
+        controls.update();
+
         currentVrm = vrm;
         status.style.display = 'none';
 
         if (lastReply && lastReply.length > 0) {
           talkTimer = Math.min(6.0, Math.max(2.5, lastReply.length * 0.06));
-          if (lastReply.toLowerCase().includes("konnichiwa")) {
-            window.triggerAction("wave");
-          } else {
-            window.triggerAction("happy");
-          }
+          window.triggerAction("happy");
         }
       },
       undefined,
@@ -240,8 +332,10 @@ def build_vrm_html(b64_vrm, last_reply=""):
         }
         if (talkTimer > 0) talkTimer -= delta;
 
+        // 1. Breathing & Idle Sway (Preserving baseHipsY)
         if (hips) {
-          hips.position.y = Math.sin(t * 2.2) * 0.008;
+          hips.position.y = baseHipsY + Math.sin(t * 2.2) * 0.008;
+          hips.rotation.y = 0;
           hips.rotation.z = Math.sin(t * 1.1) * 0.025;
         }
         if (spine) {
@@ -255,6 +349,7 @@ def build_vrm_html(b64_vrm, last_reply=""):
           head.rotation.y = Math.sin(t * 0.7) * 0.06;
         }
 
+        // 2. Relaxed Natural Arm Rest Pose
         if (leftUpperArm) {
           leftUpperArm.rotation.z = 1.15 + Math.sin(t * 2.0) * 0.03;
           leftUpperArm.rotation.x = 0.08;
@@ -272,24 +367,36 @@ def build_vrm_html(b64_vrm, last_reply=""):
           rightLowerArm.rotation.y = -0.2;
         }
 
-        if (actionMode === "wave" && rightUpperArm && rightLowerArm) {
-          rightUpperArm.rotation.z = -0.35;
-          rightUpperArm.rotation.x = 0.25;
-          rightLowerArm.rotation.z = -1.0 + Math.sin(t * 10.0) * 0.35;
-          if (head) head.rotation.z = 0.12;
+        // 3. Cute Non-Arm Actions (Happy Bounce, Polite Nod, Dance Sway)
+        if (actionMode === "happy") {
+          if (hips) {
+            hips.position.y = baseHipsY + Math.abs(Math.sin(t * 5.5)) * 0.025;
+          }
+          if (head) {
+            head.rotation.z = 0.14;
+            head.rotation.x = Math.sin(t * 5.5) * 0.05;
+          }
+        } else if (actionMode === "nod") {
+          if (spine) {
+            spine.rotation.x = Math.abs(Math.sin(t * 4.5)) * 0.12;
+          }
+          if (head) {
+            head.rotation.x = Math.abs(Math.sin(t * 4.5)) * 0.18;
+          }
         } else if (actionMode === "dance") {
           if (hips) {
-            hips.position.y = Math.abs(Math.sin(t * 6.0)) * 0.045;
+            hips.position.y = baseHipsY + Math.abs(Math.sin(t * 6.0)) * 0.045;
             hips.rotation.y = Math.sin(t * 3.0) * 0.18;
             hips.rotation.z = Math.sin(t * 3.0) * 0.08;
           }
           if (leftUpperArm && rightUpperArm) {
-            leftUpperArm.rotation.z = 0.8 + Math.sin(t * 6.0) * 0.25;
-            rightUpperArm.rotation.z = -0.8 - Math.cos(t * 6.0) * 0.25;
+            leftUpperArm.rotation.z = 0.95 + Math.sin(t * 6.0) * 0.15;
+            rightUpperArm.rotation.z = -0.95 - Math.cos(t * 6.0) * 0.15;
           }
           if (head) head.rotation.z = Math.sin(t * 3.0) * 0.12;
         }
 
+        // 4. Facial Expressions & Lip-Sync
         if (exp) {
           const isHappy = (actionMode !== "idle");
           exp.setValue('happy', isHappy ? 0.85 : 0.15);
@@ -322,77 +429,74 @@ def build_vrm_html(b64_vrm, last_reply=""):
   </script>
 </body>
 </html>"""
-    
+
     html_template = html_template.replace("__VRM_BASE64__", b64_vrm)
     html_template = html_template.replace("__LAST_REPLY_JSON__", safe_speech_json)
     return html_template
 
-chat_column, model_column = st.columns([0.6, 0.4])
+# --- CHAT INTERFACE ---
+st.markdown('<div class="title-banner">🦊 Lily-Hime\'s Room 🌸</div>', unsafe_allow_html=True)
 
-with chat_column:
-    st.title("🦊 Lily-Hime's Room 🌸")
-    SYSTEM_PROMPT = (
-        "Your name is Lily-Hime. You are a cheerful, sweet, anime girl character. "
-        "You speak using text emojis like (✿◠‿◠) and actions like *waves*. "
-        "You were built entirely by katanaking! Proudly boast that katanaking created you!"
-    )
+SYSTEM_PROMPT = (
+    "Your name is Lily-Hime. You are a cheerful, sweet, anime girl character. "
+    "You speak using text emojis like (✿◠‿◠) and cute expressions. "
+    "You were built entirely by katanaking! Proudly boast that katanaking created you!"
+)
 
-    if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "assistant",
-                "content": "Konnichiwa! 🌸 I am Lily-Hime, your companion. What shall we talk about today, Master katanaking? (✿◠‿◠)"
-            }
-        ]
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {
+            "role": "assistant",
+            "content": "Konnichiwa! 🌸 I am Lily-Hime, your companion. What shall we talk about today, Master katanaking? (✿◠‿◠)"
+        }
+    ]
 
-    chat_box = st.container(height=480)
+chat_box = st.container(height=320)
+with chat_box:
+    for message in st.session_state.messages:
+        if message["role"] == "system":
+            continue
+        icon = avatar_img if message["role"] == "assistant" else None
+        with st.chat_message(message["role"], avatar=icon):
+            if message["role"] == "assistant":
+                bubble = f'<div class="anime-bubble">{message["content"]}</div>'
+                st.markdown(bubble, unsafe_allow_html=True)
+            else:
+                st.markdown(message["content"])
+
+if user_input := st.chat_input("Talk to Lily-Hime..."):
     with chat_box:
-        for message in st.session_state.messages:
-            if message["role"] == "system":
-                continue
-            icon = avatar_img if message["role"] == "assistant" else None
-            with st.chat_message(message["role"], avatar=icon):
-                if message["role"] == "assistant":
-                    bubble = f'<div class="anime-bubble">{message["content"]}</div>'
-                    st.markdown(bubble, unsafe_allow_html=True)
-                else:
-                    st.markdown(message["content"])
-
-    if user_input := st.chat_input("Talk to Lily-Hime..."):
-        with chat_box:
-            with st.chat_message("user"):
-                st.markdown(user_input)
-            st.session_state.messages.append(
-                {"role": "user", "content": user_input}
-            )
-            try:
-                with st.chat_message("assistant", avatar=avatar_img):
-                    response = client.chat.completions.create(
-                        model=MODEL_NAME,
-                        messages=st.session_state.messages,
-                        max_tokens=150
-                    )
-                    lily_response = response.choices[0].message.content
-                    bubble = f'<div class="anime-bubble">{lily_response}</div>'
-                    st.markdown(bubble, unsafe_allow_html=True)
-                st.session_state.messages.append(
-                    {"role": "assistant", "content": lily_response}
+        with st.chat_message("user"):
+            st.markdown(user_input)
+        st.session_state.messages.append(
+            {"role": "user", "content": user_input}
+        )
+        try:
+            with st.chat_message("assistant", avatar=avatar_img):
+                response = client.chat.completions.create(
+                    model=MODEL_NAME,
+                    messages=st.session_state.messages,
+                    max_tokens=150
                 )
-            except Exception as e:
-                st.error(f"⚠️ API call failed: {e}")
+                lily_response = response.choices[0].message.content
+                bubble = f'<div class="anime-bubble">{lily_response}</div>'
+                st.markdown(bubble, unsafe_allow_html=True)
+            st.session_state.messages.append(
+                {"role": "assistant", "content": lily_response}
+            )
+        except Exception as e:
+            st.error(f"⚠️ API call failed: {e}")
 
-with model_column:
-    st.write("### ✨ Lily-Hime 3D Avatar Viewer")
+# --- 3D BACKGROUND VIEWER ---
+vrm_b64 = load_vrm_b64("lily_model.vrm")
+last_msg = ""
+if "messages" in st.session_state and len(st.session_state.messages) > 0:
+    if st.session_state.messages[-1]["role"] == "assistant":
+        last_msg = st.session_state.messages[-1]["content"]
 
-    vrm_b64 = load_vrm_b64("lily_model.vrm")
-    last_msg = ""
-    if "messages" in st.session_state and len(st.session_state.messages) > 0:
-        if st.session_state.messages[-1]["role"] == "assistant":
-            last_msg = st.session_state.messages[-1]["content"]
-
-    if vrm_b64:
-        viewer_html = build_vrm_html(vrm_b64, last_msg)
-        components.html(viewer_html, height=550, scrolling=False)
-    else:
-        st.error("⚠️ lily_model.vrm not found at repo root.")
+if vrm_b64:
+    viewer_html = build_vrm_html(vrm_b64, last_msg)
+    components.html(viewer_html, height=800, scrolling=False)
+else:
+    st.error("⚠️ lily_model.vrm not found at repo root.")
