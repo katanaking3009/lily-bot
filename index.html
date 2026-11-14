@@ -85,10 +85,10 @@
     document.body.appendChild(renderer.domElement);
 
     const camera = new THREE.PerspectiveCamera(28.0, window.innerWidth / window.innerHeight, 0.1, 20.0);
-    camera.position.set(0.0, 1.32, 2.05);
+    camera.position.set(0.0, 1.25, 2.2);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0.0, 1.22, 0.0);
+    controls.target.set(0.0, 1.15, 0.0);
     controls.enableDamping = true;
     controls.update();
 
@@ -111,6 +111,7 @@
     const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
 
     let currentVrm = null;
+    let baseHipsY = 0;
     let actionMode = "idle";
     let actionTimer = 0;
     let talkTimer = 0;
@@ -161,6 +162,21 @@
 
         if (vrm.lookAt) vrm.lookAt.target = lookAtTarget;
 
+        // Store initial hips Y so breathing animations don't collapse the model's height
+        const hips = vrm.humanoid?.getNormalizedBoneNode('hips');
+        if (hips) baseHipsY = hips.position.y;
+
+        // Auto-frame camera to model's head/chest height
+        const head = vrm.humanoid?.getNormalizedBoneNode('head');
+        if (head) {
+          vrm.scene.updateMatrixWorld(true);
+          const headPos = new THREE.Vector3();
+          head.getWorldPosition(headPos);
+          controls.target.set(0.0, headPos.y - 0.12, 0.0);
+          camera.position.set(0.0, headPos.y - 0.05, 2.15);
+          controls.update();
+        }
+
         scene.add(vrm.scene);
         currentVrm = vrm;
         status.style.display = 'none';
@@ -198,6 +214,7 @@
         const rightUpperArm = h.getNormalizedBoneNode('rightUpperArm');
         const leftLowerArm = h.getNormalizedBoneNode('leftLowerArm');
         const rightLowerArm = h.getNormalizedBoneNode('rightLowerArm');
+        const rightHand = h.getNormalizedBoneNode('rightHand');
 
         if (actionTimer > 0) {
           actionTimer -= delta;
@@ -205,9 +222,10 @@
         }
         if (talkTimer > 0) talkTimer -= delta;
 
-        // 1. Breathing & Idle Sway
+        // 1. Breathing & Idle Sway (Preserving baseHipsY)
         if (hips) {
-          hips.position.y = Math.sin(t * 2.2) * 0.008;
+          hips.position.y = baseHipsY + Math.sin(t * 2.2) * 0.008;
+          hips.rotation.y = 0;
           hips.rotation.z = Math.sin(t * 1.1) * 0.025;
         }
         if (spine) {
@@ -223,39 +241,46 @@
           head.rotation.y = Math.sin(t * 0.7) * 0.06;
         }
 
-        // 2. Corrected Natural Arm Rest Pose
+        // 2. Corrected Natural Arm Rest Pose (Three-VRM v3 Normalized Axes)
         if (leftUpperArm) {
-          leftUpperArm.rotation.z = 1.22 + Math.sin(t * 2.0) * 0.03;
-          leftUpperArm.rotation.x = 0.08;
+          leftUpperArm.rotation.set(0.08, 0.0, -1.22 - Math.sin(t * 2.0) * 0.03);
         }
         if (leftLowerArm) {
-          leftLowerArm.rotation.z = 0.15;
-          leftLowerArm.rotation.y = 0.25;
+          leftLowerArm.rotation.set(0.0, -0.25, -0.15);
         }
         if (rightUpperArm) {
-          rightUpperArm.rotation.z = -1.22 - Math.sin(t * 2.0) * 0.03;
-          rightUpperArm.rotation.x = 0.08;
+          rightUpperArm.rotation.set(0.08, 0.0, 1.22 + Math.sin(t * 2.0) * 0.03);
         }
         if (rightLowerArm) {
-          rightLowerArm.rotation.z = -0.15;
-          rightLowerArm.rotation.y = -0.25;
+          rightLowerArm.rotation.set(0.0, 0.25, 0.15);
+        }
+        if (rightHand) {
+          rightHand.rotation.set(0.0, 0.0, 0.0);
         }
 
         // 3. Action Poses (Wave / Dance)
         if (actionMode === "wave" && rightUpperArm && rightLowerArm) {
-          rightUpperArm.rotation.z = -0.35;
-          rightUpperArm.rotation.x = 0.25;
-          rightLowerArm.rotation.z = -1.1 + Math.sin(t * 10.0) * 0.35;
-          if (head) head.rotation.z = 0.12;
+          // Lift right upper arm slightly above horizontal and angle forward
+          rightUpperArm.rotation.set(0.35, 0.0, -0.35);
+          // Bend elbow upward toward head and wave forearm back and forth
+          rightLowerArm.rotation.set(0.0, 0.3, -1.25 + Math.sin(t * 10.0) * 0.35);
+          if (rightHand) {
+            rightHand.rotation.z = Math.sin(t * 10.0) * 0.25;
+          }
+          if (head) head.rotation.z = -0.12;
         } else if (actionMode === "dance") {
           if (hips) {
-            hips.position.y = Math.abs(Math.sin(t * 6.0)) * 0.045;
+            hips.position.y = baseHipsY + Math.abs(Math.sin(t * 6.0)) * 0.045;
             hips.rotation.y = Math.sin(t * 3.0) * 0.18;
             hips.rotation.z = Math.sin(t * 3.0) * 0.08;
           }
           if (leftUpperArm && rightUpperArm) {
-            leftUpperArm.rotation.z = 0.85 + Math.sin(t * 6.0) * 0.25;
-            rightUpperArm.rotation.z = -0.85 - Math.cos(t * 6.0) * 0.25;
+            leftUpperArm.rotation.z = -0.85 + Math.sin(t * 6.0) * 0.3;
+            rightUpperArm.rotation.z = 0.85 + Math.cos(t * 6.0) * 0.3;
+          }
+          if (leftLowerArm && rightLowerArm) {
+            leftLowerArm.rotation.z = -0.6 + Math.sin(t * 6.0) * 0.2;
+            rightLowerArm.rotation.z = 0.6 - Math.cos(t * 6.0) * 0.2;
           }
           if (head) head.rotation.z = Math.sin(t * 3.0) * 0.12;
         }
