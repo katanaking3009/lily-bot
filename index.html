@@ -99,7 +99,6 @@
     const bin = atob(b64);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
 
     let currentVrm = null;
     let blushGroup = null;
@@ -204,11 +203,12 @@
     loader.register((parser) => new VRMLoaderPlugin(parser));
     const clock = new THREE.Clock();
 
-    loader.load(
-      blobUrl,
+    loader.parse(
+      bytes.buffer,
+      "",
       (gltf) => {
         const vrm = gltf.userData.vrm;
-        VRMUtils.removeUnnecessaryVertices(gltf.scene);
+        
         VRMUtils.rotateVRM0(vrm);
         vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
 
@@ -234,7 +234,6 @@
 
         if (speechText) speakNow(speechText);
       },
-      undefined,
       (err) => {
         status.textContent = "⚠️ Error loading VRM";
         console.error(err);
