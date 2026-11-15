@@ -65,26 +65,22 @@ def detect_emotion(text):
     full = text.lower()
     target = actions if actions else full
 
-    if any(w in target for w in ["wave", "konnichiwa", "greet", "hello"]):
+    if any(w in target for w in ["wave", "konnichiwa", "greet", "hello", "hi "]):
         return "wave"
-    if any(w in target for w in ["blush", "shy", "fluster", "embarrass", "peek", "cover"]):
+    if any(w in target for w in ["blush", "shy", "fluster", "embarrass", "peek", "cover", "cute"]):
         return "blush"
-    if any(w in target for w in ["gasp", "shock", "surpris", "eyes widen"]):
+    if any(w in target for w in ["gasp", "shock", "surpris", "eyes widen", "woah", "ehh"]):
         return "surprised"
-    if any(w in target for w in ["angry", "pout", "hmph", "mad", "frown", "puff"]):
+    if any(w in target for w in ["angry", "pout", "hmph", "mad", "frown", "puff", "baka"]):
         return "angry"
-    if any(w in target for w in ["sad", "cry", "tear", "sob", "sniff", "whimper"]):
+    if any(w in target for w in ["sad", "cry", "tear", "sob", "sniff", "whimper", "sorry"]):
         return "sad"
-    if any(w in target for w in ["giggle", "laugh", "smile", "cheer", "yay", "happy", "grin", "spin"]):
+    if any(w in target for w in ["giggle", "laugh", "smile", "cheer", "yay", "happy", "grin", "spin", "hehe"]):
         return "happy"
-    return "idle"
+    return "happy"
 
-def build_vrm_html(b64_vrm, last_reply=""):
-    speech = clean_for_speech(last_reply)
-    emotion = detect_emotion(last_reply)
-    safe_speech_json = json.dumps(speech)
-    safe_emotion_json = json.dumps(emotion)
-
+@st.cache_data
+def build_cached_viewer_html(b64_vrm):
     html_template = """<!DOCTYPE html>
 <html>
 <head>
@@ -108,6 +104,18 @@ def build_vrm_html(b64_vrm, last_reply=""):
       font-size: 13px;
       font-weight: bold;
     }
+    #emotion-badge {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(255, 255, 255, 0.85);
+      color: #c2185b;
+      padding: 5px 11px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: bold;
+      display: none;
+    }
   </style>
   <script type="importmap">
     {
@@ -121,6 +129,7 @@ def build_vrm_html(b64_vrm, last_reply=""):
 </head>
 <body>
   <div id="status">🌸 Summoning Lily-Hime...</div>
+  <div id="emotion-badge">✨ Happy</div>
   <script type="module">
     import * as THREE from 'three';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -128,6 +137,8 @@ def build_vrm_html(b64_vrm, last_reply=""):
     import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
     const status = document.getElementById('status');
+    const badge = document.getElementById('emotion-badge');
+
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -149,35 +160,36 @@ def build_vrm_html(b64_vrm, last_reply=""):
     scene.add(dirLight);
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 
-    const b64 = "__VRM_BASE64__";
-    const lastReply = __LAST_REPLY_JSON__;
-    const detectedEmotion = __EMOTION_JSON__;
-
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+    // Reuse Blob URL across Streamlit reruns for 0ms instant loading
+    let blobUrl = window.parent.__LILY_BLOB_URL__;
+    if (!blobUrl) {
+      const b64 = "__VRM_BASE64__";
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+      try { window.parent.__LILY_BLOB_URL__ = blobUrl; } catch(e) {}
+    }
 
     let currentVrm = null;
-    let actionMode = "idle";
-    let actionTimer = 0;
-    let talkTimer = 0;
+    let actionMode = "wave";
+    let actionTimer = 5.0;
+    let talkTimer = 3.5;
     let blushGroup = null;
 
-    // Soft radial gradient texture so blush looks natural (no square boxes)
     function createSoftBlush(headNode) {
       const canvas = document.createElement('canvas');
       canvas.width = 64;
       canvas.height = 64;
       const ctx = canvas.getContext('2d');
       const grad = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
-      grad.addColorStop(0, 'rgba(255, 75, 130, 0.75)');
-      grad.addColorStop(1, 'rgba(255, 75, 130, 0.0)');
+      grad.addColorStop(0, 'rgba(255, 60, 125, 0.85)');
+      grad.addColorStop(1, 'rgba(255, 60, 125, 0.0)');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, 64, 64);
 
       const tex = new THREE.CanvasTexture(canvas);
-      const geo = new THREE.PlaneGeometry(0.055, 0.032);
+      const geo = new THREE.PlaneGeometry(0.058, 0.034);
       const mat = new THREE.MeshBasicMaterial({
         map: tex,
         transparent: true,
@@ -187,11 +199,11 @@ def build_vrm_html(b64_vrm, last_reply=""):
 
       const group = new THREE.Group();
       const leftCheek = new THREE.Mesh(geo, mat);
-      leftCheek.position.set(0.048, 0.015, 0.092);
+      leftCheek.position.set(0.048, 0.015, 0.094);
       leftCheek.rotation.y = 0.22;
 
       const rightCheek = new THREE.Mesh(geo, mat);
-      rightCheek.position.set(-0.048, 0.015, 0.092);
+      rightCheek.position.set(-0.048, 0.015, 0.094);
       rightCheek.rotation.y = -0.22;
 
       group.add(leftCheek);
@@ -200,6 +212,38 @@ def build_vrm_html(b64_vrm, last_reply=""):
       headNode.add(group);
       return group;
     }
+
+    // Universal VRM 0.x & 1.0 expression setter
+    function setVrmExp(exp, names, val) {
+      if (!exp) return;
+      for (const n of names) {
+        try { exp.setValue(n, val); } catch (e) {}
+      }
+    }
+
+    window.applyLilyState = (emotion, replyText) => {
+      actionMode = emotion || "happy";
+      actionTimer = 6.5;
+      talkTimer = replyText ? Math.min(8.0, Math.max(3.0, replyText.length * 0.055)) : 3.5;
+
+      const labels = {
+        wave: "👋 Waving",
+        blush: "😳 Blushing",
+        surprised: "😲 Gasping",
+        happy: "😊 Happy",
+        angry: "💢 Pouting",
+        sad: "😢 Sad",
+        idle: "🌸 Calm"
+      };
+      badge.textContent = labels[actionMode] || "✨ Expressing";
+      badge.style.display = "block";
+    };
+
+    window.addEventListener("message", (event) => {
+      if (event.data && event.data.type === "LILY_STATE") {
+        window.applyLilyState(event.data.emotion, event.data.speech);
+      }
+    });
 
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMLoaderPlugin(parser));
@@ -220,7 +264,6 @@ def build_vrm_html(b64_vrm, last_reply=""):
 
         scene.add(vrm.scene);
 
-        // Pre-pose arms down before resetting spring bones so skirt/hair never explode
         const h = vrm.humanoid;
         const lArm = h?.getNormalizedBoneNode('leftUpperArm');
         const rArm = h?.getNormalizedBoneNode('rightUpperArm');
@@ -234,10 +277,11 @@ def build_vrm_html(b64_vrm, last_reply=""):
         currentVrm = vrm;
         status.style.display = 'none';
 
-        if (lastReply && lastReply.length > 0) {
-          talkTimer = Math.min(7.5, Math.max(2.5, lastReply.length * 0.055));
-          actionMode = detectedEmotion !== "idle" ? detectedEmotion : "happy";
-          actionTimer = 5.5;
+        if (window.parent.__LILY_LAST_STATE__) {
+          const st = window.parent.__LILY_LAST_STATE__;
+          window.applyLilyState(st.emotion, st.speech);
+        } else {
+          window.applyLilyState("wave", "Konnichiwa!");
         }
       },
       undefined,
@@ -249,7 +293,6 @@ def build_vrm_html(b64_vrm, last_reply=""):
 
     function animate() {
       requestAnimationFrame(animate);
-      // Clamp delta to max 0.05s so hair/skirt physics never explode on frame spikes
       const delta = Math.min(clock.getDelta(), 0.05);
       const t = clock.getElapsedTime();
 
@@ -264,101 +307,127 @@ def build_vrm_html(b64_vrm, last_reply=""):
         const rightUpperArm = h.getNormalizedBoneNode('rightUpperArm');
         const leftLowerArm = h.getNormalizedBoneNode('leftLowerArm');
         const rightLowerArm = h.getNormalizedBoneNode('rightLowerArm');
+        const leftHand = h.getNormalizedBoneNode('leftHand');
         const rightHand = h.getNormalizedBoneNode('rightHand');
 
         if (actionTimer > 0) {
           actionTimer -= delta;
-          if (actionTimer <= 0) actionMode = "idle";
+          if (actionTimer <= 0) {
+            actionMode = "idle";
+            badge.style.display = "none";
+          }
         }
         if (talkTimer > 0) talkTimer -= delta;
 
         // 1. Calm Standing Breathing
         if (spine) {
-          spine.rotation.x = Math.sin(t * 1.6) * 0.016;
-          spine.rotation.z = Math.cos(t * 0.9) * 0.01;
+          spine.rotation.set(Math.sin(t * 1.6) * 0.016, 0.0, Math.cos(t * 0.9) * 0.01);
         }
         if (chest) {
-          chest.rotation.y = Math.sin(t * 0.8) * 0.02;
+          chest.rotation.set(0.0, Math.sin(t * 0.8) * 0.02, 0.0);
         }
         if (head) {
-          head.rotation.z = Math.sin(t * 1.1) * 0.025;
-          head.rotation.x = Math.sin(t * 1.4) * 0.018;
-          head.rotation.y = Math.sin(t * 0.6) * 0.035;
+          head.rotation.set(
+            Math.sin(t * 1.4) * 0.02,
+            Math.sin(t * 0.6) * 0.035,
+            Math.sin(t * 1.1) * 0.025
+          );
         }
 
-        // 2. Default Relaxed Arms (Down naturally at sides, no stiff downward wrists)
-        if (leftUpperArm) {
-          leftUpperArm.rotation.set(0.05, 0.0, 1.18 + Math.sin(t * 1.6) * 0.015);
-        }
-        if (leftLowerArm) {
-          leftLowerArm.rotation.set(0.0, 0.0, 0.0);
-        }
-        if (rightUpperArm) {
-          rightUpperArm.rotation.set(0.05, 0.0, -1.18 - Math.sin(t * 1.6) * 0.015);
-        }
-        if (rightLowerArm) {
-          rightLowerArm.rotation.set(0.0, 0.0, 0.0);
-        }
-        if (rightHand) {
-          rightHand.rotation.set(0.0, 0.0, 0.0);
-        }
+        // 2. Default Relaxed Arms
+        if (leftUpperArm) leftUpperArm.rotation.set(0.05, 0.0, 1.18 + Math.sin(t * 1.6) * 0.015);
+        if (leftLowerArm) leftLowerArm.rotation.set(0.0, 0.0, 0.0);
+        if (leftHand) leftHand.rotation.set(0.0, 0.0, 0.0);
 
-        // 3. Corrected Action Poses (Hand points UP when waving, soft head tilt on blush)
+        if (rightUpperArm) rightUpperArm.rotation.set(0.05, 0.0, -1.18 - Math.sin(t * 1.6) * 0.015);
+        if (rightLowerArm) rightLowerArm.rotation.set(0.0, 0.0, 0.0);
+        if (rightHand) rightHand.rotation.set(0.0, 0.0, 0.0);
+
+        // 3. Expressive Body Poses + Front-Facing Palm on Wave
         if (actionMode === "wave" && rightUpperArm && rightLowerArm) {
-          // Lift right arm and bend elbow UPWARD (+Z on this VRM rig)
-          rightUpperArm.rotation.set(0.35, 0.0, -0.45);
-          rightLowerArm.rotation.set(0.25, 0.0, 1.15 + Math.sin(t * 9.0) * 0.28);
+          // Lift upper arm slightly forward & out
+          rightUpperArm.rotation.set(0.25, -0.25, -0.45);
+          // Bend elbow up (+Z) and twist forearm (+Y = 1.55 rad) so palm faces FRONT toward camera
+          rightLowerArm.rotation.set(0.15, 1.55, 1.15);
           if (rightHand) {
-            rightHand.rotation.z = Math.sin(t * 9.0) * 0.25;
+            // Twist wrist slightly forward and wave side-to-side
+            rightHand.rotation.set(0.15, 0.35, Math.sin(t * 10.0) * 0.32);
           }
-          if (head) head.rotation.z = 0.08;
+          if (head) head.rotation.z = 0.09;
         } else if (actionMode === "blush") {
+          // Shy head tilt downward + hands brought up near chest/cheeks
           if (head) {
-            head.rotation.x = 0.14;
-            head.rotation.z = 0.10 + Math.sin(t * 2.5) * 0.04;
+            head.rotation.x = 0.16;
+            head.rotation.z = 0.12 + Math.sin(t * 3.0) * 0.05;
           }
-          if (spine) {
-            spine.rotation.y = Math.sin(t * 2.0) * 0.06;
+          if (spine) spine.rotation.y = Math.sin(t * 2.5) * 0.08;
+          if (leftUpperArm && rightUpperArm && leftLowerArm && rightLowerArm) {
+            leftUpperArm.rotation.set(0.45, 0.3, 0.85);
+            rightUpperArm.rotation.set(0.45, -0.3, -0.85);
+            leftLowerArm.rotation.set(0.2, -1.2, -1.05);
+            rightLowerArm.rotation.set(0.2, 1.2, 1.05);
           }
         } else if (actionMode === "surprised") {
-          if (spine) spine.rotation.x = -0.06;
-          if (head) head.rotation.x = -0.06;
+          // Startled lean back + both hands up in gasp pose
+          if (spine) spine.rotation.x = -0.09;
+          if (head) head.rotation.x = -0.10;
+          if (leftUpperArm && rightUpperArm && leftLowerArm && rightLowerArm) {
+            leftUpperArm.rotation.set(0.35, 0.2, 0.70);
+            rightUpperArm.rotation.set(0.35, -0.2, -0.70);
+            leftLowerArm.rotation.set(0.1, -1.3, -0.95);
+            rightLowerArm.rotation.set(0.1, 1.3, 0.95);
+          }
+        } else if (actionMode === "happy") {
+          // Cheerful head bob and lively torso sway
+          if (head) {
+            head.rotation.z = Math.sin(t * 4.5) * 0.10;
+            head.rotation.x = -0.05;
+          }
+          if (spine) spine.rotation.z = Math.sin(t * 4.5) * 0.05;
           if (leftUpperArm && rightUpperArm) {
-            leftUpperArm.rotation.z = 0.95;
-            rightUpperArm.rotation.z = -0.95;
+            leftUpperArm.rotation.z = 0.98 + Math.sin(t * 4.5) * 0.08;
+            rightUpperArm.rotation.z = -0.98 - Math.sin(t * 4.5) * 0.08;
           }
         } else if (actionMode === "sad") {
-          if (head) head.rotation.x = 0.20;
-          if (spine) spine.rotation.x = 0.06;
+          if (head) {
+            head.rotation.x = 0.26;
+            head.rotation.y = Math.sin(t * 2.0) * 0.05;
+          }
+          if (spine) spine.rotation.x = 0.10;
         } else if (actionMode === "angry") {
-          if (head) head.rotation.x = 0.08;
-          if (leftUpperArm && rightUpperArm) {
-            leftUpperArm.rotation.z = 0.95;
-            rightUpperArm.rotation.z = -0.95;
+          if (head) head.rotation.x = 0.10;
+          if (leftUpperArm && rightUpperArm && leftLowerArm && rightLowerArm) {
+            leftUpperArm.rotation.set(0.2, 0.0, 0.75);
+            rightUpperArm.rotation.set(0.2, 0.0, -0.75);
+            leftLowerArm.rotation.set(0.0, -0.8, -0.65);
+            rightLowerArm.rotation.set(0.0, 0.8, 0.65);
           }
         }
 
-        // 4. Facial Expressions & Soft Blush Gradient
+        // 4. Facial Expressions (Supports both VRM 0.x and VRM 1.0 blendshape names)
         if (blushGroup) {
-          blushGroup.userData.mat.opacity = (actionMode === "blush" || actionMode === "happy") ? 0.65 : 0.0;
+          blushGroup.userData.mat.opacity = (actionMode === "blush" || actionMode === "happy") ? 0.75 : 0.0;
         }
 
         if (exp) {
-          exp.setValue('happy', (actionMode === "happy" || actionMode === "wave" || actionMode === "blush") ? 0.85 : 0.1);
-          exp.setValue('angry', (actionMode === "angry") ? 0.9 : 0.0);
-          exp.setValue('sad', (actionMode === "sad") ? 0.9 : 0.0);
-          exp.setValue('surprised', (actionMode === "surprised") ? 0.95 : 0.0);
+          const isHappy = (actionMode === "happy" || actionMode === "wave" || actionMode === "blush");
+          setVrmExp(exp, ['happy', 'joy', 'fun'], isHappy ? 0.95 : 0.1);
+          setVrmExp(exp, ['angry'], (actionMode === "angry") ? 0.95 : 0.0);
+          setVrmExp(exp, ['sad', 'sorrow'], (actionMode === "sad") ? 0.95 : 0.0);
+          setVrmExp(exp, ['surprised'], (actionMode === "surprised") ? 1.0 : 0.0);
 
-          const disableBlink = (actionMode === "happy" || actionMode === "wave" || actionMode === "blush" || actionMode === "surprised");
+          const disableBlink = (isHappy || actionMode === "surprised");
           const rawBlink = Math.max(0, Math.sin(t * 1.4) - 0.96) * 25;
-          exp.setValue('blink', disableBlink ? 0.0 : Math.min(1.0, rawBlink));
+          setVrmExp(exp, ['blink'], disableBlink ? 0.0 : Math.min(1.0, rawBlink));
 
           if (talkTimer > 0) {
-            exp.setValue('aa', Math.abs(Math.sin(t * 12.5)) * 0.65);
-            exp.setValue('oh', (actionMode === "surprised") ? 0.75 : Math.abs(Math.cos(t * 8.5)) * 0.25);
+            const mouthOpen = Math.abs(Math.sin(t * 13.5)) * 0.75;
+            const mouthRound = (actionMode === "surprised") ? 0.85 : Math.abs(Math.cos(t * 9.0)) * 0.35;
+            setVrmExp(exp, ['aa', 'a'], mouthOpen);
+            setVrmExp(exp, ['oh', 'o'], mouthRound);
           } else {
-            exp.setValue('aa', 0.0);
-            exp.setValue('oh', (actionMode === "surprised") ? 0.6 : 0.0);
+            setVrmExp(exp, ['aa', 'a'], 0.0);
+            setVrmExp(exp, ['oh', 'o'], (actionMode === "surprised") ? 0.7 : 0.0);
           }
         }
 
@@ -378,19 +447,13 @@ def build_vrm_html(b64_vrm, last_reply=""):
   </script>
 </body>
 </html>"""
-
-    html_template = html_template.replace("__VRM_BASE64__", b64_vrm)
-    html_template = html_template.replace("__LAST_REPLY_JSON__", safe_speech_json)
-    html_template = html_template.replace("__EMOTION_JSON__", safe_emotion_json)
-    return html_template
-
-model_column, chat_column = st.columns([0.45, 0.55])
+    return html_template.replace("__VRM_BASE64__", b64_vrm)
 
 SYSTEM_PROMPT = (
     "Your name is Lily-Hime. You are a cheerful, sweet, expressive anime girl character. "
-    "Always include cute roleplay actions in asterisks like *blushes*, *gasps*, *waves*, "
-    "*giggles*, *pouts*, or *cries* to show your emotions, along with text emojis like (✿◠‿◠). "
-    "Keep your responses complete, warm, and natural without cutting off mid-sentence. "
+    "Always start your reply with a cute roleplay action in asterisks like *blushes*, *gasps*, "
+    "*waves*, *giggles*, *pouts*, or *cries* to show your emotions, along with text emojis like (✿◠‿◠). "
+    "Keep your responses concise (2 to 3 sentences), warm, and natural. "
     "You were built entirely by katanaking! Proudly boast that katanaking created you!"
 )
 
@@ -399,10 +462,13 @@ if "messages" not in st.session_state:
         {"role": "system", "content": SYSTEM_PROMPT},
         {
             "role": "assistant",
-            "content": "Konnichiwa! 🌸 *waves happily* I am Lily-Hime, your companion. What shall we talk about today, Master katanaking? (✿◠‿◠)"
+            "content": "*waves happily* Konnichiwa! 🌸 I am Lily-Hime, your companion. What shall we talk about today, Master katanaking? (✿◠‿◠)"
         }
     ]
 
+model_column, chat_column = st.columns([0.45, 0.55])
+
+# Process chat FIRST so the newest reply & emotion are ready immediately on the same run
 with chat_column:
     st.subheader("🦊 Lily-Hime's Room 🌸")
     chat_box = st.container(height=420)
@@ -431,7 +497,7 @@ with chat_column:
                     response = client.chat.completions.create(
                         model=MODEL_NAME,
                         messages=st.session_state.messages,
-                        max_tokens=500,
+                        max_tokens=220,
                         temperature=0.7
                     )
                     lily_response = response.choices[0].message.content
@@ -450,8 +516,24 @@ with model_column:
         if st.session_state.messages[-1]["role"] == "assistant":
             last_msg = st.session_state.messages[-1]["content"]
 
+    emotion = detect_emotion(last_msg)
+    speech = clean_for_speech(last_msg)
+
     if vrm_b64:
-        viewer_html = build_vrm_html(vrm_b64, last_msg)
-        components.html(viewer_html, height=480, scrolling=False)
+        # 1. Render cached 3D viewer (does not re-encode or reload when chatting)
+        components.html(build_cached_viewer_html(vrm_b64), height=480, scrolling=False)
+
+        # 2. Lightweight 0ms state bridge to trigger expressions immediately
+        state_payload = json.dumps({"type": "LILY_STATE", "emotion": emotion, "speech": speech})
+        components.html(f"""
+        <script>
+        const payload = {state_payload};
+        window.parent.__LILY_LAST_STATE__ = payload;
+        const frames = window.parent.document.querySelectorAll('iframe');
+        frames.forEach(f => {{
+            try {{ f.contentWindow.postMessage(payload, '*'); }} catch(e) {{}}
+        }});
+        </script>
+        """, height=0)
     else:
         st.error("⚠️ lily_model.vrm not found at repo root.")
