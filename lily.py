@@ -106,15 +106,16 @@ def build_cached_viewer_html(b64_vrm):
     }
     #emotion-badge {
       position: absolute;
-      top: 12px;
+      top: 14px;
       right: 12px;
-      background: rgba(255, 255, 255, 0.85);
+      background: rgba(255, 255, 255, 0.88);
       color: #c2185b;
       padding: 5px 11px;
       border-radius: 16px;
       font-size: 12px;
       font-weight: bold;
       display: none;
+      box-shadow: 0 2px 8px rgba(255, 105, 180, 0.2);
     }
   </style>
   <script type="importmap">
@@ -160,7 +161,6 @@ def build_cached_viewer_html(b64_vrm):
     scene.add(dirLight);
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 
-    // Reuse Blob URL across Streamlit reruns for 0ms instant loading
     let blobUrl = window.parent.__LILY_BLOB_URL__;
     if (!blobUrl) {
       const b64 = "__VRM_BASE64__";
@@ -176,6 +176,7 @@ def build_cached_viewer_html(b64_vrm):
     let actionTimer = 5.0;
     let talkTimer = 3.5;
     let blushGroup = null;
+    let lastSpokenText = "";
 
     function createSoftBlush(headNode) {
       const canvas = document.createElement('canvas');
@@ -213,13 +214,58 @@ def build_cached_viewer_html(b64_vrm):
       return group;
     }
 
-    // Universal VRM 0.x & 1.0 expression setter
     function setVrmExp(exp, names, val) {
       if (!exp) return;
       for (const n of names) {
         try { exp.setValue(n, val); } catch (e) {}
       }
     }
+
+    // Restored Anime Voice Synthesis (works across parent & iframe)
+    function speakText(textToSay, forceRepeat = false) {
+      if (!textToSay) return;
+      if (!forceRepeat && textToSay === lastSpokenText) return;
+      lastSpokenText = textToSay;
+
+      const synth = (window.parent && 'speechSynthesis' in window.parent)
+        ? window.parent.speechSynthesis
+        : ('speechSynthesis' in window ? window.speechSynthesis : null);
+
+      if (!synth) return;
+
+      try {
+        synth.cancel();
+        const utter = new SpeechSynthesisUtterance(textToSay);
+        utter.pitch = 1.45;
+        utter.rate = 1.05;
+
+        const voices = synth.getVoices();
+        const femVoice = voices.find(v =>
+          v.name.includes("Female") ||
+          v.name.includes("Zira") ||
+          v.name.includes("Google UK English Female") ||
+          v.name.includes("Samantha") ||
+          v.name.includes(" Victoria")
+        );
+        if (femVoice) utter.voice = femVoice;
+
+        utter.onstart = () => { talkTimer = 14.0; };
+        utter.onend = () => { talkTimer = 0.0; };
+        utter.onerror = () => { talkTimer = 0.0; };
+
+        synth.speak(utter);
+      } catch (e) {
+        console.warn("TTS error:", e);
+      }
+    }
+
+    // Tapping Lily's 3D canvas replays her voice & unlocks Android Chrome audio
+    renderer.domElement.addEventListener("pointerdown", () => {
+      if (lastSpokenText) {
+        talkTimer = Math.min(7.0, Math.max(2.5, lastSpokenText.length * 0.055));
+        speakText(lastSpokenText, true);
+      }
+    });
 
     window.applyLilyState = (emotion, replyText) => {
       actionMode = emotion || "happy";
@@ -237,6 +283,10 @@ def build_cached_viewer_html(b64_vrm):
       };
       badge.textContent = labels[actionMode] || "✨ Expressing";
       badge.style.display = "block";
+
+      if (replyText) {
+        speakText(replyText, false);
+      }
     };
 
     window.addEventListener("message", (event) => {
@@ -281,7 +331,7 @@ def build_cached_viewer_html(b64_vrm):
           const st = window.parent.__LILY_LAST_STATE__;
           window.applyLilyState(st.emotion, st.speech);
         } else {
-          window.applyLilyState("wave", "Konnichiwa!");
+          window.applyLilyState("wave", "Konnichiwa! I am Lily-Hime, your companion.");
         }
       },
       undefined,
@@ -343,19 +393,19 @@ def build_cached_viewer_html(b64_vrm):
         if (rightLowerArm) rightLowerArm.rotation.set(0.0, 0.0, 0.0);
         if (rightHand) rightHand.rotation.set(0.0, 0.0, 0.0);
 
-        // 3. Expressive Body Poses + Front-Facing Palm on Wave
+        // 3. Expressive Body Poses + True Left-Right Hand Wave
         if (actionMode === "wave" && rightUpperArm && rightLowerArm) {
-          // Lift upper arm slightly forward & out
-          rightUpperArm.rotation.set(0.25, -0.25, -0.45);
-          // Bend elbow up (+Z) and twist forearm (+Y = 1.55 rad) so palm faces FRONT toward camera
-          rightLowerArm.rotation.set(0.15, 1.55, 1.15);
+          const waveSwing = Math.sin(t * 9.5);
+          // Lift upper arm out to the side
+          rightUpperArm.rotation.set(0.20, -0.20, -0.48);
+          // Bend forearm up (+Z) with side-to-side forearm sway, twisted +Y so palm faces front
+          rightLowerArm.rotation.set(0.15, 1.55, 1.15 + waveSwing * 0.22);
           if (rightHand) {
-            // Twist wrist slightly forward and wave side-to-side
-            rightHand.rotation.set(0.15, 0.35, Math.sin(t * 10.0) * 0.32);
+            // Because forearm is twisted 90 deg on Y, X-axis is now LEFT-RIGHT wrist wave!
+            rightHand.rotation.set(waveSwing * 0.35, 0.30, 0.0);
           }
           if (head) head.rotation.z = 0.09;
         } else if (actionMode === "blush") {
-          // Shy head tilt downward + hands brought up near chest/cheeks
           if (head) {
             head.rotation.x = 0.16;
             head.rotation.z = 0.12 + Math.sin(t * 3.0) * 0.05;
@@ -368,7 +418,6 @@ def build_cached_viewer_html(b64_vrm):
             rightLowerArm.rotation.set(0.2, 1.2, 1.05);
           }
         } else if (actionMode === "surprised") {
-          // Startled lean back + both hands up in gasp pose
           if (spine) spine.rotation.x = -0.09;
           if (head) head.rotation.x = -0.10;
           if (leftUpperArm && rightUpperArm && leftLowerArm && rightLowerArm) {
@@ -378,7 +427,6 @@ def build_cached_viewer_html(b64_vrm):
             rightLowerArm.rotation.set(0.1, 1.3, 0.95);
           }
         } else if (actionMode === "happy") {
-          // Cheerful head bob and lively torso sway
           if (head) {
             head.rotation.z = Math.sin(t * 4.5) * 0.10;
             head.rotation.x = -0.05;
@@ -404,7 +452,7 @@ def build_cached_viewer_html(b64_vrm):
           }
         }
 
-        // 4. Facial Expressions (Supports both VRM 0.x and VRM 1.0 blendshape names)
+        // 4. Facial Expressions
         if (blushGroup) {
           blushGroup.userData.mat.opacity = (actionMode === "blush" || actionMode === "happy") ? 0.75 : 0.0;
         }
@@ -468,7 +516,6 @@ if "messages" not in st.session_state:
 
 model_column, chat_column = st.columns([0.45, 0.55])
 
-# Process chat FIRST so the newest reply & emotion are ready immediately on the same run
 with chat_column:
     st.subheader("🦊 Lily-Hime's Room 🌸")
     chat_box = st.container(height=420)
@@ -510,30 +557,4 @@ with chat_column:
                 st.error(f"⚠️ API call failed: {e}")
 
 with model_column:
-    vrm_b64 = load_vrm_b64("lily_model.vrm")
-    last_msg = ""
-    if "messages" in st.session_state and len(st.session_state.messages) > 0:
-        if st.session_state.messages[-1]["role"] == "assistant":
-            last_msg = st.session_state.messages[-1]["content"]
-
-    emotion = detect_emotion(last_msg)
-    speech = clean_for_speech(last_msg)
-
-    if vrm_b64:
-        # 1. Render cached 3D viewer (does not re-encode or reload when chatting)
-        components.html(build_cached_viewer_html(vrm_b64), height=480, scrolling=False)
-
-        # 2. Lightweight 0ms state bridge to trigger expressions immediately
-        state_payload = json.dumps({"type": "LILY_STATE", "emotion": emotion, "speech": speech})
-        components.html(f"""
-        <script>
-        const payload = {state_payload};
-        window.parent.__LILY_LAST_STATE__ = payload;
-        const frames = window.parent.document.querySelectorAll('iframe');
-        frames.forEach(f => {{
-            try {{ f.contentWindow.postMessage(payload, '*'); }} catch(e) {{}}
-        }});
-        </script>
-        """, height=0)
-    else:
-        st.error("⚠️ lily_model.vrm not found at repo root.")
+    vrm_b64 
