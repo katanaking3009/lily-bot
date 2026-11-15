@@ -15,7 +15,7 @@ st.set_page_config(
 st.markdown("""
 <style>
 .block-container {
-    padding-top: 1.5rem !important;
+    padding-top: 1.2rem !important;
     padding-left: 0.8rem !important;
     padding-right: 0.8rem !important;
 }
@@ -65,17 +65,17 @@ def detect_emotion(text):
     full = text.lower()
     target = actions if actions else full
 
-    if any(w in target for w in ["blush", "shy", "fluster", "embarrass"]):
-        return "blush"
-    if any(w in target for w in ["gasp", "shock", "surpris", "eyes widen", "blink"]):
-        return "surprised"
     if any(w in target for w in ["wave", "konnichiwa", "greet", "hello"]):
         return "wave"
+    if any(w in target for w in ["blush", "shy", "fluster", "embarrass", "peek", "cover"]):
+        return "blush"
+    if any(w in target for w in ["gasp", "shock", "surpris", "eyes widen"]):
+        return "surprised"
     if any(w in target for w in ["angry", "pout", "hmph", "mad", "frown", "puff"]):
         return "angry"
     if any(w in target for w in ["sad", "cry", "tear", "sob", "sniff", "whimper"]):
         return "sad"
-    if any(w in target for w in ["giggle", "laugh", "smile", "cheer", "yay", "bounce", "happy", "grin"]):
+    if any(w in target for w in ["giggle", "laugh", "smile", "cheer", "yay", "happy", "grin", "spin"]):
         return "happy"
     return "idle"
 
@@ -164,23 +164,35 @@ def build_vrm_html(b64_vrm, last_reply=""):
     let talkTimer = 0;
     let blushGroup = null;
 
-    function createBlushStickers(headNode) {
-      const group = new THREE.Group();
-      const geo = new THREE.PlaneGeometry(0.042, 0.022);
+    // Soft radial gradient texture so blush looks natural (no square boxes)
+    function createSoftBlush(headNode) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 64;
+      canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
+      grad.addColorStop(0, 'rgba(255, 75, 130, 0.75)');
+      grad.addColorStop(1, 'rgba(255, 75, 130, 0.0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 64, 64);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      const geo = new THREE.PlaneGeometry(0.055, 0.032);
       const mat = new THREE.MeshBasicMaterial({
-        color: 0xff5c8a,
+        map: tex,
         transparent: true,
         opacity: 0.0,
-        depthWrite: false,
-        side: THREE.DoubleSide
+        depthWrite: false
       });
+
+      const group = new THREE.Group();
       const leftCheek = new THREE.Mesh(geo, mat);
-      leftCheek.position.set(0.052, 0.02, 0.095);
-      leftCheek.rotation.y = 0.25;
+      leftCheek.position.set(0.048, 0.015, 0.092);
+      leftCheek.rotation.y = 0.22;
 
       const rightCheek = new THREE.Mesh(geo, mat);
-      rightCheek.position.set(-0.052, 0.02, 0.095);
-      rightCheek.rotation.y = -0.25;
+      rightCheek.position.set(-0.048, 0.015, 0.092);
+      rightCheek.rotation.y = -0.22;
 
       group.add(leftCheek);
       group.add(rightCheek);
@@ -191,6 +203,7 @@ def build_vrm_html(b64_vrm, last_reply=""):
 
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMLoaderPlugin(parser));
+    const clock = new THREE.Clock();
 
     loader.load(
       blobUrl,
@@ -202,10 +215,22 @@ def build_vrm_html(b64_vrm, last_reply=""):
 
         const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
         if (headNode) {
-          blushGroup = createBlushStickers(headNode);
+          blushGroup = createSoftBlush(headNode);
         }
 
         scene.add(vrm.scene);
+
+        // Pre-pose arms down before resetting spring bones so skirt/hair never explode
+        const h = vrm.humanoid;
+        const lArm = h?.getNormalizedBoneNode('leftUpperArm');
+        const rArm = h?.getNormalizedBoneNode('rightUpperArm');
+        if (lArm) lArm.rotation.z = 1.18;
+        if (rArm) rArm.rotation.z = -1.18;
+
+        vrm.update(0.016);
+        vrm.springBoneManager?.reset();
+        clock.start();
+
         currentVrm = vrm;
         status.style.display = 'none';
 
@@ -222,11 +247,10 @@ def build_vrm_html(b64_vrm, last_reply=""):
       }
     );
 
-    const clock = new THREE.Clock();
-
     function animate() {
       requestAnimationFrame(animate);
-      const delta = clock.getDelta();
+      // Clamp delta to max 0.05s so hair/skirt physics never explode on frame spikes
+      const delta = Math.min(clock.getDelta(), 0.05);
       const t = clock.getElapsedTime();
 
       if (currentVrm && currentVrm.humanoid) {
@@ -240,6 +264,7 @@ def build_vrm_html(b64_vrm, last_reply=""):
         const rightUpperArm = h.getNormalizedBoneNode('rightUpperArm');
         const leftLowerArm = h.getNormalizedBoneNode('leftLowerArm');
         const rightLowerArm = h.getNormalizedBoneNode('rightLowerArm');
+        const rightHand = h.getNormalizedBoneNode('rightHand');
 
         if (actionTimer > 0) {
           actionTimer -= delta;
@@ -247,78 +272,75 @@ def build_vrm_html(b64_vrm, last_reply=""):
         }
         if (talkTimer > 0) talkTimer -= delta;
 
-        // 1. Calm Standing Breathing (No vertical hopping)
+        // 1. Calm Standing Breathing
         if (spine) {
-          spine.rotation.x = Math.sin(t * 1.6) * 0.018;
-          spine.rotation.z = Math.cos(t * 0.9) * 0.012;
+          spine.rotation.x = Math.sin(t * 1.6) * 0.016;
+          spine.rotation.z = Math.cos(t * 0.9) * 0.01;
         }
         if (chest) {
-          chest.rotation.y = Math.sin(t * 0.8) * 0.025;
+          chest.rotation.y = Math.sin(t * 0.8) * 0.02;
         }
         if (head) {
-          head.rotation.z = Math.sin(t * 1.1) * 0.03;
-          head.rotation.x = Math.sin(t * 1.4) * 0.02;
-          head.rotation.y = Math.sin(t * 0.6) * 0.04;
+          head.rotation.z = Math.sin(t * 1.1) * 0.025;
+          head.rotation.x = Math.sin(t * 1.4) * 0.018;
+          head.rotation.y = Math.sin(t * 0.6) * 0.035;
         }
 
-        // 2. Default Relaxed Arms
+        // 2. Default Relaxed Arms (Down naturally at sides, no stiff downward wrists)
         if (leftUpperArm) {
-          leftUpperArm.rotation.z = 1.15 + Math.sin(t * 1.6) * 0.02;
-          leftUpperArm.rotation.x = 0.08;
+          leftUpperArm.rotation.set(0.05, 0.0, 1.18 + Math.sin(t * 1.6) * 0.015);
         }
         if (leftLowerArm) {
-          leftLowerArm.rotation.z = 0.15;
-          leftLowerArm.rotation.y = 0.2;
+          leftLowerArm.rotation.set(0.0, 0.0, 0.0);
         }
         if (rightUpperArm) {
-          rightUpperArm.rotation.z = -1.15 - Math.sin(t * 1.6) * 0.02;
-          rightUpperArm.rotation.x = 0.08;
+          rightUpperArm.rotation.set(0.05, 0.0, -1.18 - Math.sin(t * 1.6) * 0.015);
         }
         if (rightLowerArm) {
-          rightLowerArm.rotation.z = -0.15;
-          rightLowerArm.rotation.y = -0.2;
+          rightLowerArm.rotation.set(0.0, 0.0, 0.0);
+        }
+        if (rightHand) {
+          rightHand.rotation.set(0.0, 0.0, 0.0);
         }
 
-        // 3. Action Poses from Chat Brackets/Asterisks
+        // 3. Corrected Action Poses (Hand points UP when waving, soft head tilt on blush)
         if (actionMode === "wave" && rightUpperArm && rightLowerArm) {
-          rightUpperArm.rotation.z = -0.35;
-          rightUpperArm.rotation.x = 0.25;
-          rightLowerArm.rotation.z = -1.0 + Math.sin(t * 9.0) * 0.35;
-          if (head) head.rotation.z = 0.10;
+          // Lift right arm and bend elbow UPWARD (+Z on this VRM rig)
+          rightUpperArm.rotation.set(0.35, 0.0, -0.45);
+          rightLowerArm.rotation.set(0.25, 0.0, 1.15 + Math.sin(t * 9.0) * 0.28);
+          if (rightHand) {
+            rightHand.rotation.z = Math.sin(t * 9.0) * 0.25;
+          }
+          if (head) head.rotation.z = 0.08;
         } else if (actionMode === "blush") {
           if (head) {
-            head.rotation.x = 0.16;
-            head.rotation.z = Math.sin(t * 2.5) * 0.08;
+            head.rotation.x = 0.14;
+            head.rotation.z = 0.10 + Math.sin(t * 2.5) * 0.04;
           }
-          if (leftUpperArm && rightUpperArm && leftLowerArm && rightLowerArm) {
-            leftUpperArm.rotation.x = 0.45;
-            rightUpperArm.rotation.x = 0.45;
-            leftLowerArm.rotation.z = 0.85;
-            rightLowerArm.rotation.z = -0.85;
+          if (spine) {
+            spine.rotation.y = Math.sin(t * 2.0) * 0.06;
           }
         } else if (actionMode === "surprised") {
-          if (spine) spine.rotation.x = -0.08;
-          if (head) head.rotation.x = -0.08;
-          if (leftUpperArm && rightUpperArm && leftLowerArm && rightLowerArm) {
-            leftUpperArm.rotation.x = 0.5;
-            rightUpperArm.rotation.x = 0.5;
-            leftLowerArm.rotation.z = 1.05;
-            rightLowerArm.rotation.z = -1.05;
+          if (spine) spine.rotation.x = -0.06;
+          if (head) head.rotation.x = -0.06;
+          if (leftUpperArm && rightUpperArm) {
+            leftUpperArm.rotation.z = 0.95;
+            rightUpperArm.rotation.z = -0.95;
           }
         } else if (actionMode === "sad") {
-          if (head) head.rotation.x = 0.22;
-          if (spine) spine.rotation.x = 0.08;
+          if (head) head.rotation.x = 0.20;
+          if (spine) spine.rotation.x = 0.06;
         } else if (actionMode === "angry") {
-          if (leftUpperArm && rightUpperArm) {
-            leftUpperArm.rotation.z = 0.85;
-            rightUpperArm.rotation.z = -0.85;
-          }
           if (head) head.rotation.x = 0.08;
+          if (leftUpperArm && rightUpperArm) {
+            leftUpperArm.rotation.z = 0.95;
+            rightUpperArm.rotation.z = -0.95;
+          }
         }
 
-        // 4. Facial Expressions & Blush Overlay
+        // 4. Facial Expressions & Soft Blush Gradient
         if (blushGroup) {
-          blushGroup.userData.mat.opacity = (actionMode === "blush") ? 0.55 : 0.0;
+          blushGroup.userData.mat.opacity = (actionMode === "blush" || actionMode === "happy") ? 0.65 : 0.0;
         }
 
         if (exp) {
@@ -332,11 +354,11 @@ def build_vrm_html(b64_vrm, last_reply=""):
           exp.setValue('blink', disableBlink ? 0.0 : Math.min(1.0, rawBlink));
 
           if (talkTimer > 0) {
-            exp.setValue('aa', Math.abs(Math.sin(t * 12.5)) * 0.7);
-            exp.setValue('oh', (actionMode === "surprised") ? 0.8 : Math.abs(Math.cos(t * 8.5)) * 0.3);
+            exp.setValue('aa', Math.abs(Math.sin(t * 12.5)) * 0.65);
+            exp.setValue('oh', (actionMode === "surprised") ? 0.75 : Math.abs(Math.cos(t * 8.5)) * 0.25);
           } else {
             exp.setValue('aa', 0.0);
-            exp.setValue('oh', (actionMode === "surprised") ? 0.65 : 0.0);
+            exp.setValue('oh', (actionMode === "surprised") ? 0.6 : 0.0);
           }
         }
 
@@ -362,7 +384,6 @@ def build_vrm_html(b64_vrm, last_reply=""):
     html_template = html_template.replace("__EMOTION_JSON__", safe_emotion_json)
     return html_template
 
-# Layout: 3D Avatar on the right (or top on mobile), full-width chat
 model_column, chat_column = st.columns([0.45, 0.55])
 
 SYSTEM_PROMPT = (
