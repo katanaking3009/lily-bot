@@ -12,27 +12,38 @@
     canvas { width: 100vw; height: 100vh; display: block; }
     #status {
       position: absolute;
-      top: 12px;
-      left: 12px;
-      background: rgba(255, 255, 255, 0.85);
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.9);
       color: #d63384;
-      padding: 6px 12px;
+      padding: 5px 11px;
       border-radius: 20px;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: bold;
     }
     #emotion-badge {
       position: absolute;
-      top: 14px;
-      right: 12px;
-      background: rgba(255, 255, 255, 0.88);
+      top: 10px;
+      right: 10px;
+      background: rgba(255, 255, 255, 0.92);
       color: #c2185b;
-      padding: 5px 11px;
+      padding: 5px 12px;
       border-radius: 16px;
       font-size: 12px;
       font-weight: bold;
-      display: none;
-      box-shadow: 0 2px 8px rgba(255, 105, 180, 0.2);
+      box-shadow: 0 2px 8px rgba(255, 105, 180, 0.25);
+      z-index: 10;
+    }
+    #sound-hint {
+      position: absolute;
+      bottom: 8px;
+      right: 10px;
+      background: rgba(255, 255, 255, 0.8);
+      color: #ad1457;
+      padding: 4px 9px;
+      border-radius: 12px;
+      font-size: 11px;
+      pointer-events: none;
     }
   </style>
   <script type="importmap">
@@ -47,7 +58,9 @@
 </head>
 <body>
   <div id="status">🌸 Summoning Lily-Hime...</div>
-  <div id="emotion-badge">✨ Happy</div>
+  <div id="emotion-badge">✨ Ready</div>
+  <div id="sound-hint">🔊 Tap Lily for voice</div>
+
   <script type="module">
     import * as THREE from 'three';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -57,18 +70,22 @@
     const status = document.getElementById('status');
     const badge = document.getElementById('emotion-badge');
 
+    // Injected directly by Python on every reply (100% immune to iframe sandbox)
+    const activeActions = __ACTIONS_JSON__;
+    const speechText = __SPEECH_JSON__;
+
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.95;
     document.body.appendChild(renderer.domElement);
 
-    const camera = new THREE.PerspectiveCamera(28.0, window.innerWidth / window.innerHeight, 0.1, 20.0);
-    camera.position.set(0.0, 1.30, 1.85);
+    const camera = new THREE.PerspectiveCamera(26.0, window.innerWidth / window.innerHeight, 0.1, 20.0);
+    camera.position.set(0.0, 1.33, 1.55);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0.0, 1.20, 0.0);
+    controls.target.set(0.0, 1.25, 0.0);
     controls.enableDamping = true;
     controls.update();
 
@@ -78,51 +95,60 @@
     scene.add(dirLight);
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 
-    let blobUrl = window.parent.__LILY_BLOB_URL__;
-    if (!blobUrl) {
-      const b64 = "__VRM_BASE64__";
-      const bin = atob(b64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
-      try { window.parent.__LILY_BLOB_URL__ = blobUrl; } catch(e) {}
-    }
+    const b64 = "__VRM_BASE64__";
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
 
     let currentVrm = null;
-    let actionMode = "wave";
-    let actionTimer = 5.0;
-    let talkTimer = 3.5;
     let blushGroup = null;
-    let lastSpokenText = "";
+    let talkTimer = speechText ? Math.min(9.0, Math.max(3.5, speechText.length * 0.06)) : 4.0;
+    let actionDuration = 8.5;
 
-    function createSoftBlush(headNode) {
+    function createAnimeBlush(headNode) {
       const canvas = document.createElement('canvas');
-      canvas.width = 64;
+      canvas.width = 128;
       canvas.height = 64;
       const ctx = canvas.getContext('2d');
-      const grad = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
-      grad.addColorStop(0, 'rgba(255, 60, 125, 0.85)');
-      grad.addColorStop(1, 'rgba(255, 60, 125, 0.0)');
+
+      const grad = ctx.createRadialGradient(64, 32, 4, 64, 32, 54);
+      grad.addColorStop(0, 'rgba(255, 45, 115, 0.95)');
+      grad.addColorStop(0.6, 'rgba(255, 80, 140, 0.55)');
+      grad.addColorStop(1, 'rgba(255, 80, 140, 0.0)');
       ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, 64, 64);
+      ctx.fillRect(0, 0, 128, 64);
+
+      // Cute anime blush slash lines
+      ctx.strokeStyle = 'rgba(255, 20, 90, 0.75)';
+      ctx.lineWidth = 3.5;
+      for (let i = -20; i <= 20; i += 10) {
+        ctx.beginPath();
+        ctx.moveTo(60 + i, 20);
+        ctx.lineTo(52 + i, 44);
+        ctx.stroke();
+      }
 
       const tex = new THREE.CanvasTexture(canvas);
-      const geo = new THREE.PlaneGeometry(0.058, 0.034);
+      const geo = new THREE.PlaneGeometry(0.068, 0.036);
       const mat = new THREE.MeshBasicMaterial({
         map: tex,
         transparent: true,
         opacity: 0.0,
-        depthWrite: false
+        depthWrite: false,
+        depthTest: false
       });
 
       const group = new THREE.Group();
       const leftCheek = new THREE.Mesh(geo, mat);
-      leftCheek.position.set(0.048, 0.015, 0.094);
+      leftCheek.position.set(0.052, -0.005, 0.098);
       leftCheek.rotation.y = 0.22;
+      leftCheek.renderOrder = 999;
 
       const rightCheek = new THREE.Mesh(geo, mat);
-      rightCheek.position.set(-0.048, 0.015, 0.094);
+      rightCheek.position.set(-0.052, -0.005, 0.098);
       rightCheek.rotation.y = -0.22;
+      rightCheek.renderOrder = 999;
 
       group.add(leftCheek);
       group.add(rightCheek);
@@ -131,81 +157,48 @@
       return group;
     }
 
-    function setVrmExp(exp, names, val) {
+    function setExp(exp, names, val) {
       if (!exp) return;
       for (const n of names) {
         try { exp.setValue(n, val); } catch (e) {}
       }
     }
 
-    function speakText(textToSay, forceRepeat = false) {
-      if (!textToSay) return;
-      if (!forceRepeat && textToSay === lastSpokenText) return;
-      lastSpokenText = textToSay;
-
-      const synth = (window.parent && 'speechSynthesis' in window.parent)
-        ? window.parent.speechSynthesis
-        : ('speechSynthesis' in window ? window.speechSynthesis : null);
-
-      if (!synth) return;
-
+    function speakNow(text) {
+      if (!text || !('speechSynthesis' in window)) return;
       try {
-        synth.cancel();
-        const utter = new SpeechSynthesisUtterance(textToSay);
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
         utter.pitch = 1.45;
         utter.rate = 1.05;
-
-        const voices = synth.getVoices();
-        const femVoice = voices.find(v =>
-          v.name.includes("Female") ||
-          v.name.includes("Zira") ||
-          v.name.includes("Google UK English Female") ||
-          v.name.includes("Samantha")
+        const voices = window.speechSynthesis.getVoices();
+        const fem = voices.find(v =>
+          v.name.includes("Female") || v.name.includes("Zira") || v.name.includes("Samantha")
         );
-        if (femVoice) utter.voice = femVoice;
-
-        utter.onstart = () => { talkTimer = 14.0; };
+        if (fem) utter.voice = fem;
+        utter.onstart = () => { talkTimer = 12.0; };
         utter.onend = () => { talkTimer = 0.0; };
-        utter.onerror = () => { talkTimer = 0.0; };
-
-        synth.speak(utter);
+        window.speechSynthesis.speak(utter);
       } catch (e) {}
     }
 
     renderer.domElement.addEventListener("pointerdown", () => {
-      if (lastSpokenText) {
-        talkTimer = Math.min(7.0, Math.max(2.5, lastSpokenText.length * 0.055));
-        speakText(lastSpokenText, true);
-      }
+      actionDuration = 8.0;
+      talkTimer = 5.0;
+      speakNow(speechText || "Konnichiwa Master katanaking!");
     });
 
-    window.applyLilyState = (emotion, replyText) => {
-      actionMode = emotion || "happy";
-      actionTimer = 6.5;
-      talkTimer = replyText ? Math.min(8.0, Math.max(3.0, replyText.length * 0.055)) : 3.5;
-
-      const labels = {
-        wave: "👋 Waving",
-        blush: "😳 Blushing",
-        surprised: "😲 Gasping",
-        happy: "😊 Happy",
-        angry: "💢 Pouting",
-        sad: "😢 Sad",
-        idle: "🌸 Calm"
-      };
-      badge.textContent = labels[actionMode] || "✨ Expressing";
-      badge.style.display = "block";
-
-      if (replyText) {
-        speakText(replyText, false);
-      }
+    const badgeMap = {
+      blush: "😳 Blushing",
+      look_away: "🙈 Looking Away",
+      surprised: "😲 Gasping!",
+      giggle: "🤭 Giggling",
+      wave: "👋 Waving",
+      angry: "💢 Pouting",
+      sad: "😢 Crying",
+      happy: "😊 Happy"
     };
-
-    window.addEventListener("message", (event) => {
-      if (event.data && event.data.type === "LILY_STATE") {
-        window.applyLilyState(event.data.emotion, event.data.speech);
-      }
-    });
+    badge.textContent = activeActions.map(a => badgeMap[a] || a).join(" + ");
 
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMLoaderPlugin(parser));
@@ -221,7 +214,7 @@
 
         const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
         if (headNode) {
-          blushGroup = createSoftBlush(headNode);
+          blushGroup = createAnimeBlush(headNode);
         }
 
         scene.add(vrm.scene);
@@ -239,12 +232,7 @@
         currentVrm = vrm;
         status.style.display = 'none';
 
-        if (window.parent.__LILY_LAST_STATE__) {
-          const st = window.parent.__LILY_LAST_STATE__;
-          window.applyLilyState(st.emotion, st.speech);
-        } else {
-          window.applyLilyState("wave", "Konnichiwa! I am Lily-Hime, your companion.");
-        }
+        if (speechText) speakNow(speechText);
       },
       undefined,
       (err) => {
@@ -264,7 +252,10 @@
 
         const spine = h.getNormalizedBoneNode('spine');
         const chest = h.getNormalizedBoneNode('chest');
+        const neck = h.getNormalizedBoneNode('neck');
         const head = h.getNormalizedBoneNode('head');
+        const leftShoulder = h.getNormalizedBoneNode('leftShoulder');
+        const rightShoulder = h.getNormalizedBoneNode('rightShoulder');
         const leftUpperArm = h.getNormalizedBoneNode('leftUpperArm');
         const rightUpperArm = h.getNormalizedBoneNode('rightUpperArm');
         const leftLowerArm = h.getNormalizedBoneNode('leftLowerArm');
@@ -272,112 +263,134 @@
         const leftHand = h.getNormalizedBoneNode('leftHand');
         const rightHand = h.getNormalizedBoneNode('rightHand');
 
-        if (actionTimer > 0) {
-          actionTimer -= delta;
-          if (actionTimer <= 0) {
-            actionMode = "idle";
-            badge.style.display = "none";
-          }
-        }
+        if (actionDuration > 0) actionDuration -= delta;
         if (talkTimer > 0) talkTimer -= delta;
 
-        if (spine) spine.rotation.set(Math.sin(t * 1.6) * 0.016, 0.0, Math.cos(t * 0.9) * 0.01);
-        if (chest) chest.rotation.set(0.0, Math.sin(t * 0.8) * 0.02, 0.0);
-        if (head) {
-          head.rotation.set(
-            Math.sin(t * 1.4) * 0.02,
-            Math.sin(t * 0.6) * 0.035,
-            Math.sin(t * 1.1) * 0.025
-          );
+        const isActing = actionDuration > 0;
+        const has = (act) => isActing && activeActions.includes(act);
+
+        // If BOTH surprised (*gasps*) and giggle/blush are in the same message,
+        // play the dramatic GASP for the first 3.0 seconds, then transition to shy giggle/blush!
+        const inGaspPhase = has("surprised") && (t < 3.0 || (activeActions.length === 1));
+
+        // 1. Base Calm Breathing
+        let spineX = Math.sin(t * 1.6) * 0.016;
+        let spineY = 0.0;
+        let spineZ = Math.cos(t * 0.9) * 0.01;
+        let headX = Math.sin(t * 1.4) * 0.02;
+        let headY = Math.sin(t * 0.6) * 0.03;
+        let headZ = Math.sin(t * 1.1) * 0.025;
+
+        let lUp = [0.05, 0.0, 1.18];
+        let rUp = [0.05, 0.0, -1.18];
+        let lLow = [0.0, 0.0, 0.0];
+        let rLow = [0.0, 0.0, 0.0];
+        let lHnd = [0.0, 0.0, 0.0];
+        let rHnd = [0.0, 0.0, 0.0];
+
+        // 2. Layer Active Bracket/Asterisk Actions onto Bones!
+        if (inGaspPhase) {
+          // *gasps and eyes light up* -> Sudden lean back, shoulders up, hands fly toward mouth
+          const gaspPulse = Math.sin(t * 12.0) * 0.02;
+          spineX = -0.14 + gaspPulse;
+          headX = -0.14;
+          headZ = 0.0;
+          lUp = [0.55, 0.35, 0.72];
+          rUp = [0.55, -0.35, -0.72];
+          lLow = [0.25, -1.35, -1.15];
+          rLow = [0.25, 1.35, 1.15];
+        } else {
+          if (has("wave")) {
+            const swing = Math.sin(t * 9.5);
+            rUp = [0.20, -0.20, -0.48];
+            rLow = [0.15, 1.55, 1.15 + swing * 0.22];
+            rHnd = [swing * 0.35, 0.30, 0.0];
+            headZ = 0.12;
+          }
+
+          if (has("blush")) {
+            // *blushes deeply* -> Shy fidgeting torso twist, hands held up near cheeks
+            spineY = Math.sin(t * 3.2) * 0.14;
+            headX = 0.22;
+            headZ = 0.16 + Math.sin(t * 3.5) * 0.06;
+            lUp = [0.50, 0.35, 0.82];
+            rUp = [0.50, -0.35, -0.82];
+            lLow = [0.25, -1.25, -1.12];
+            rLow = [0.25, 1.25, 1.12];
+          }
+
+          if (has("look_away")) {
+            // *shyly looks away* -> Turns head & neck 38 degrees to the side and down
+            headY = 0.62;
+            headX = 0.25;
+            spineY = -0.18;
+          }
+
+          if (has("giggle") || has("happy")) {
+            // *giggles shyly* -> Cute rapid shoulder/chest laugh bounce & head bob
+            const laughBounce = Math.abs(Math.sin(t * 11.0)) * 0.06;
+            spineX += laughBounce;
+            headZ = Math.sin(t * 5.5) * 0.12;
+            if (leftShoulder && rightShoulder) {
+              leftShoulder.rotation.z = laughBounce * 1.5;
+              rightShoulder.rotation.z = -laughBounce * 1.5;
+            }
+          }
+
+          if (has("sad")) {
+            headX = 0.32;
+            spineX = 0.14;
+          }
+
+          if (has("angry")) {
+            headX = 0.12;
+            headY = -0.25;
+            lUp = [0.2, 0.0, 0.70];
+            rUp = [0.2, 0.0, -0.70];
+            lLow = [0.0, -0.85, -0.75];
+            rLow = [0.0, 0.85, 0.75];
+          }
         }
 
-        if (leftUpperArm) leftUpperArm.rotation.set(0.05, 0.0, 1.18 + Math.sin(t * 1.6) * 0.015);
-        if (leftLowerArm) leftLowerArm.rotation.set(0.0, 0.0, 0.0);
-        if (leftHand) leftHand.rotation.set(0.0, 0.0, 0.0);
+        if (spine) spine.rotation.set(spineX, spineY, spineZ);
+        if (chest) chest.rotation.set(0.0, spineY * 0.5, 0.0);
+        if (neck) neck.rotation.set(headX * 0.35, headY * 0.35, 0.0);
+        if (head) head.rotation.set(headX, headY, headZ);
 
-        if (rightUpperArm) rightUpperArm.rotation.set(0.05, 0.0, -1.18 - Math.sin(t * 1.6) * 0.015);
-        if (rightLowerArm) rightLowerArm.rotation.set(0.0, 0.0, 0.0);
-        if (rightHand) rightHand.rotation.set(0.0, 0.0, 0.0);
+        if (leftUpperArm) leftUpperArm.rotation.set(...lUp);
+        if (rightUpperArm) rightUpperArm.rotation.set(...rUp);
+        if (leftLowerArm) leftLowerArm.rotation.set(...lLow);
+        if (rightLowerArm) rightLowerArm.rotation.set(...rLow);
+        if (leftHand) leftHand.rotation.set(...lHnd);
+        if (rightHand) rightHand.rotation.set(...rHnd);
 
-        // True Left-Right Hand Wave
-        if (actionMode === "wave" && rightUpperArm && rightLowerArm) {
-          const waveSwing = Math.sin(t * 9.5);
-          rightUpperArm.rotation.set(0.20, -0.20, -0.48);
-          rightLowerArm.rotation.set(0.15, 1.55, 1.15 + waveSwing * 0.22);
-          if (rightHand) {
-            rightHand.rotation.set(waveSwing * 0.35, 0.30, 0.0);
-          }
-          if (head) head.rotation.z = 0.09;
-        } else if (actionMode === "blush") {
-          if (head) {
-            head.rotation.x = 0.16;
-            head.rotation.z = 0.12 + Math.sin(t * 3.0) * 0.05;
-          }
-          if (spine) spine.rotation.y = Math.sin(t * 2.5) * 0.08;
-          if (leftUpperArm && rightUpperArm && leftLowerArm && rightLowerArm) {
-            leftUpperArm.rotation.set(0.45, 0.3, 0.85);
-            rightUpperArm.rotation.set(0.45, -0.3, -0.85);
-            leftLowerArm.rotation.set(0.2, -1.2, -1.05);
-            rightLowerArm.rotation.set(0.2, 1.2, 1.05);
-          }
-        } else if (actionMode === "surprised") {
-          if (spine) spine.rotation.x = -0.09;
-          if (head) head.rotation.x = -0.10;
-          if (leftUpperArm && rightUpperArm && leftLowerArm && rightLowerArm) {
-            leftUpperArm.rotation.set(0.35, 0.2, 0.70);
-            rightUpperArm.rotation.set(0.35, -0.2, -0.70);
-            leftLowerArm.rotation.set(0.1, -1.3, -0.95);
-            rightLowerArm.rotation.set(0.1, 1.3, 0.95);
-          }
-        } else if (actionMode === "happy") {
-          if (head) {
-            head.rotation.z = Math.sin(t * 4.5) * 0.10;
-            head.rotation.x = -0.05;
-          }
-          if (spine) spine.rotation.z = Math.sin(t * 4.5) * 0.05;
-          if (leftUpperArm && rightUpperArm) {
-            leftUpperArm.rotation.z = 0.98 + Math.sin(t * 4.5) * 0.08;
-            rightUpperArm.rotation.z = -0.98 - Math.sin(t * 4.5) * 0.08;
-          }
-        } else if (actionMode === "sad") {
-          if (head) {
-            head.rotation.x = 0.26;
-            head.rotation.y = Math.sin(t * 2.0) * 0.05;
-          }
-          if (spine) spine.rotation.x = 0.10;
-        } else if (actionMode === "angry") {
-          if (head) head.rotation.x = 0.10;
-          if (leftUpperArm && rightUpperArm && leftLowerArm && rightLowerArm) {
-            leftUpperArm.rotation.set(0.2, 0.0, 0.75);
-            rightUpperArm.rotation.set(0.2, 0.0, -0.75);
-            leftLowerArm.rotation.set(0.0, -0.8, -0.65);
-            rightLowerArm.rotation.set(0.0, 0.8, 0.65);
-          }
-        }
-
+        // 3. Bright Anime Cheek Blush Overlay
         if (blushGroup) {
-          blushGroup.userData.mat.opacity = (actionMode === "blush" || actionMode === "happy") ? 0.75 : 0.0;
+          const showBlush = has("blush") || has("giggle") || has("look_away");
+          blushGroup.userData.mat.opacity = showBlush ? (0.85 + Math.sin(t * 4.0) * 0.15) : 0.0;
         }
 
+        // 4. VRM Facial Expressions
         if (exp) {
-          const isHappy = (actionMode === "happy" || actionMode === "wave" || actionMode === "blush");
-          setVrmExp(exp, ['happy', 'joy', 'fun'], isHappy ? 0.95 : 0.1);
-          setVrmExp(exp, ['angry'], (actionMode === "angry") ? 0.95 : 0.0);
-          setVrmExp(exp, ['sad', 'sorrow'], (actionMode === "sad") ? 0.95 : 0.0);
-          setVrmExp(exp, ['surprised'], (actionMode === "surprised") ? 1.0 : 0.0);
+          const isHappy = !inGaspPhase && (has("happy") || has("giggle") || has("wave") || has("blush"));
+          setExp(exp, ['happy', 'joy', 'fun'], isHappy ? 1.0 : 0.0);
+          setExp(exp, ['surprised'], inGaspPhase ? 1.0 : 0.0);
+          setExp(exp, ['angry'], has("angry") ? 1.0 : 0.0);
+          setExp(exp, ['sad', 'sorrow'], has("sad") ? 1.0 : 0.0);
 
-          const disableBlink = (isHappy || actionMode === "surprised");
-          const rawBlink = Math.max(0, Math.sin(t * 1.4) - 0.96) * 25;
-          setVrmExp(exp, ['blink'], disableBlink ? 0.0 : Math.min(1.0, rawBlink));
+          const disableBlink = isHappy || inGaspPhase;
+          const rawBlink = Math.max(0, Math.sin(t * 1.5) - 0.96) * 25;
+          setExp(exp, ['blink'], disableBlink ? 0.0 : Math.min(1.0, rawBlink));
 
-          if (talkTimer > 0) {
-            const mouthOpen = Math.abs(Math.sin(t * 13.5)) * 0.75;
-            const mouthRound = (actionMode === "surprised") ? 0.85 : Math.abs(Math.cos(t * 9.0)) * 0.35;
-            setVrmExp(exp, ['aa', 'a'], mouthOpen);
-            setVrmExp(exp, ['oh', 'o'], mouthRound);
+          if (inGaspPhase) {
+            setExp(exp, ['oh', 'o'], 0.95);
+            setExp(exp, ['aa', 'a'], 0.45);
+          } else if (talkTimer > 0) {
+            setExp(exp, ['aa', 'a'], Math.abs(Math.sin(t * 13.5)) * 0.8);
+            setExp(exp, ['oh', 'o'], Math.abs(Math.cos(t * 9.0)) * 0.35);
           } else {
-            setVrmExp(exp, ['aa', 'a'], 0.0);
-            setVrmExp(exp, ['oh', 'o'], (actionMode === "surprised") ? 0.7 : 0.0);
+            setExp(exp, ['aa', 'a'], 0.0);
+            setExp(exp, ['oh', 'o'], 0.0);
           }
         }
 
