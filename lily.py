@@ -9,109 +9,27 @@ import json
 st.set_page_config(
     page_title="Lily-Hime AI 🌸",
     page_icon="🌸",
-    layout="centered"
+    layout="wide"
 )
 
-# Ultra-transparent glass UI with buttons safely tucked on the side
 st.markdown("""
 <style>
-  /* Make Streamlit main containers transparent so the 3D background shows through */
-  .stApp, [data-testid="stAppViewContainer"], [data-testid="stHeader"] {
-      background: transparent !important;
-  }
-
-  /* Only the top header bar is click-through, so it can't cover the 3D buttons.
-     Page scrolling is left untouched. */
-  [data-testid="stHeader"] {
-      pointer-events: none !important;
-  }
-  [data-testid="stToolbar"] {
-      pointer-events: auto !important;
-  }
-
-  /* Pin ONLY the 3D VRM iframe to cover the full background */
-  iframe[height="800"] {
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 100vw !important;
-      height: 100vh !important;
-  }
-
-  /* Keep the main chat container above the 3D model */
-  .block-container {
-      position: relative !important;
-      z-index: 5 !important;
-      padding-top: 1rem !important;
-      max-width: 700px !important;
-      pointer-events: none !important;
-  }
-
-  /* Re-enable clicks on actual chat elements */
-  [data-testid="stVerticalBlockBorderWrapper"],
-  [data-testid="stChatInput"],
-  .title-banner {
-      pointer-events: auto !important;
-  }
-
-  /* Title pill styling */
-  .title-banner {
-      display: inline-block;
-      background: rgba(255, 255, 255, 0.45);
-      backdrop-filter: blur(6px);
-      padding: 6px 18px;
-      border-radius: 24px;
-      border: 1px solid rgba(255, 105, 180, 0.4);
-      color: #b01050 !important;
-      font-weight: 800;
-      font-size: 1.25rem;
-      text-shadow: 0 1px 4px rgba(255, 255, 255, 0.9);
-      margin-bottom: 6px;
-  }
-
-  /* Ultra-transparent scrollable chat container pushed to lower screen */
-  [data-testid="stVerticalBlockBorderWrapper"] {
-      background: rgba(255, 255, 255, 0.12) !important;
-      backdrop-filter: blur(2px) !important;
-      border-radius: 20px !important;
-      border: 1px solid rgba(255, 182, 193, 0.35) !important;
-  }
-
-  /* Ultra-transparent chat message bubbles */
-  [data-testid="stChatMessage"] {
-      background: rgba(255, 255, 255, 0.28) !important;
-      backdrop-filter: blur(4px) !important;
-      border-radius: 16px !important;
-      border: 1px solid rgba(255, 182, 193, 0.45) !important;
-      margin-bottom: 8px !important;
-      padding: 8px 12px !important;
-  }
-
-  /* High-contrast readable text */
-  [data-testid="stChatMessage"] p,
-  [data-testid="stChatMessage"] span,
-  [data-testid="stChatMessage"] div,
-  [data-testid="stMarkdownContainer"] p {
-      color: #2b0938 !important;
-      font-weight: 600 !important;
-      text-shadow: 0px 0px 6px rgba(255, 255, 255, 0.95), 0px 1px 2px rgba(255, 255, 255, 1) !important;
-  }
-
-  .anime-bubble {
-      background: rgba(255, 240, 246, 0.32);
-      border-left: 4px solid #ff4da6;
-      padding: 8px 12px;
-      border-radius: 12px;
-      color: #2b0938 !important;
-      font-weight: 600;
-      text-shadow: 0px 0px 6px rgba(255, 255, 255, 0.95);
-  }
-
-  [data-testid="stBottom"],
-  [data-testid="stBottom"] > div {
-      z-index: 10 !important;
-      background: transparent !important;
-  }
+.block-container {
+    padding-top: 1.5rem !important;
+    padding-left: 0.8rem !important;
+    padding-right: 0.8rem !important;
+}
+.anime-bubble {
+    background: rgba(255, 182, 193, 0.18);
+    border-left: 4px solid #ff69b4;
+    padding: 12px 14px;
+    border-radius: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.5;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -142,63 +60,54 @@ def clean_for_speech(text):
     text = re.sub(r"[^\w\s,.!?'-]", "", text)
     return " ".join(text.split())
 
-@st.cache_data
-def build_vrm_html(b64_vrm):
+def detect_emotion(text):
+    actions = " ".join(re.findall(r"(\*.*?\*|\(.*?\))", text)).lower()
+    full = text.lower()
+    target = actions if actions else full
+
+    if any(w in target for w in ["blush", "shy", "fluster", "embarrass"]):
+        return "blush"
+    if any(w in target for w in ["gasp", "shock", "surpris", "eyes widen", "blink"]):
+        return "surprised"
+    if any(w in target for w in ["wave", "konnichiwa", "greet", "hello"]):
+        return "wave"
+    if any(w in target for w in ["angry", "pout", "hmph", "mad", "frown", "puff"]):
+        return "angry"
+    if any(w in target for w in ["sad", "cry", "tear", "sob", "sniff", "whimper"]):
+        return "sad"
+    if any(w in target for w in ["giggle", "laugh", "smile", "cheer", "yay", "bounce", "happy", "grin"]):
+        return "happy"
+    return "idle"
+
+def build_vrm_html(b64_vrm, last_reply=""):
+    speech = clean_for_speech(last_reply)
+    emotion = detect_emotion(last_reply)
+    safe_speech_json = json.dumps(speech)
+    safe_emotion_json = json.dumps(emotion)
+
     html_template = """<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <style>
-    html, body {
+    body {
       margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
       overflow: hidden;
-      background: radial-gradient(circle at 50% 30%, #fff0f6 0%, #ffd6e7 100%);
+      background: radial-gradient(circle at 50% 35%, #fff0f6 0%, #ffd6e7 100%);
       font-family: sans-serif;
     }
-    canvas { width: 100vw !important; height: 100vh !important; display: block; }
+    canvas { width: 100vw; height: 100vh; display: block; }
     #status {
       position: absolute;
-      top: 16px;
-      left: 16px;
+      top: 12px;
+      left: 12px;
       background: rgba(255, 255, 255, 0.85);
       color: #d63384;
       padding: 6px 12px;
       border-radius: 20px;
       font-size: 13px;
       font-weight: bold;
-      z-index: 20;
     }
-    /* Control bar moved down so Streamlit's header never covers it */
-    .controls {
-      position: absolute;
-      top: 70px;
-      right: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      background: rgba(255, 255, 255, 0.82);
-      backdrop-filter: blur(6px);
-      padding: 10px;
-      border-radius: 18px;
-      box-shadow: 0 4px 20px rgba(255, 105, 180, 0.3);
-      z-index: 20;
-    }
-    .btn {
-      border: 1px solid #ffb3d9;
-      background: rgba(255, 255, 255, 0.95);
-      color: #c2185b;
-      padding: 6px 12px;
-      border-radius: 14px;
-      font-size: 11px;
-      font-weight: 700;
-      cursor: pointer;
-      text-align: left;
-      white-space: nowrap;
-    }
-    .btn:active { background: #ff69b4; color: white; }
   </style>
   <script type="importmap">
     {
@@ -212,14 +121,6 @@ def build_vrm_html(b64_vrm):
 </head>
 <body>
   <div id="status">🌸 Summoning Lily-Hime...</div>
-  <div class="controls">
-    <button class="btn" data-expr="happy">😊 Happy</button>
-    <button class="btn" data-expr="blush">😳 Blush</button>
-    <button class="btn" data-expr="angry">💢 Angry</button>
-    <button class="btn" data-expr="sad">💧 Sad/Cry</button>
-    <button class="btn" data-expr="dance">💃 Dance</button>
-    <button class="btn" id="voiceBtn">🔊 Voice</button>
-  </div>
   <script type="module">
     import * as THREE from 'three';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -235,12 +136,11 @@ def build_vrm_html(b64_vrm):
     document.body.appendChild(renderer.domElement);
 
     const camera = new THREE.PerspectiveCamera(28.0, window.innerWidth / window.innerHeight, 0.1, 20.0);
-    camera.position.set(0.0, 1.32, 2.05);
+    camera.position.set(0.0, 1.30, 1.85);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0.0, 1.22, 0.0);
+    controls.target.set(0.0, 1.20, 0.0);
     controls.enableDamping = true;
-    controls.enableZoom = false;
     controls.update();
 
     const scene = new THREE.Scene();
@@ -249,11 +149,9 @@ def build_vrm_html(b64_vrm):
     scene.add(dirLight);
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 
-    const lookAtTarget = new THREE.Object3D();
-    camera.add(lookAtTarget);
-
     const b64 = "__VRM_BASE64__";
-    let lastReply = "Konnichiwa! I am Lily-Hime, your companion.";
+    const lastReply = __LAST_REPLY_JSON__;
+    const detectedEmotion = __EMOTION_JSON__;
 
     const bin = atob(b64);
     const bytes = new Uint8Array(bin.length);
@@ -261,51 +159,35 @@ def build_vrm_html(b64_vrm):
     const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
 
     let currentVrm = null;
-    let baseHipsY = 0;
-    let currentMode = "happy";
+    let actionMode = "idle";
     let actionTimer = 0;
     let talkTimer = 0;
+    let blushGroup = null;
 
-    window.triggerExpression = (mode, customText) => {
-      currentMode = mode;
-      actionTimer = 6.0;
-      if (customText) lastReply = customText;
-    };
+    function createBlushStickers(headNode) {
+      const group = new THREE.Group();
+      const geo = new THREE.PlaneGeometry(0.042, 0.022);
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xff5c8a,
+        transparent: true,
+        opacity: 0.0,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      });
+      const leftCheek = new THREE.Mesh(geo, mat);
+      leftCheek.position.set(0.052, 0.02, 0.095);
+      leftCheek.rotation.y = 0.25;
 
-    window.speakReply = (customText, expr) => {
-      if (expr) {
-        currentMode = expr;
-      } else {
-        currentMode = "happy";
-      }
-      actionTimer = 5.0;
+      const rightCheek = new THREE.Mesh(geo, mat);
+      rightCheek.position.set(-0.052, 0.02, 0.095);
+      rightCheek.rotation.y = -0.25;
 
-      const textToSay = customText || lastReply || "Konnichiwa Master katanaking!";
-      talkTimer = Math.min(7.0, Math.max(2.5, textToSay.length * 0.06));
-
-      if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-        const utter = new SpeechSynthesisUtterance(textToSay);
-        utter.pitch = 1.4;
-        utter.rate = 1.05;
-        utter.onstart = () => { talkTimer = 12.0; };
-        utter.onend = () => { talkTimer = 0.0; };
-        utter.onerror = () => { talkTimer = 0.0; };
-        window.speechSynthesis.speak(utter);
-      }
-    };
-
-    // FIX: wire buttons with real event listeners instead of inline onclick
-    document.querySelectorAll('.btn[data-expr]').forEach((b) => {
-      b.addEventListener('click', () => window.triggerExpression(b.dataset.expr));
-    });
-    document.getElementById('voiceBtn').addEventListener('click', () => window.speakReply());
-
-    try {
-      window.parent.lilyAction = (text, expr) => {
-        window.speakReply(text, expr);
-      };
-    } catch (e) {}
+      group.add(leftCheek);
+      group.add(rightCheek);
+      group.userData.mat = mat;
+      headNode.add(group);
+      return group;
+    }
 
     const loader = new GLTFLoader();
     loader.register((parser) => new VRMLoaderPlugin(parser));
@@ -318,29 +200,20 @@ def build_vrm_html(b64_vrm):
         VRMUtils.rotateVRM0(vrm);
         vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
 
-        if (vrm.lookAt) vrm.lookAt.target = lookAtTarget;
+        const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
+        if (headNode) {
+          blushGroup = createBlushStickers(headNode);
+        }
 
         scene.add(vrm.scene);
-
-        const hips = vrm.humanoid?.getNormalizedBoneNode('hips');
-        if (hips) baseHipsY = hips.position.y;
-
-        vrm.scene.updateMatrixWorld(true);
-        const box = new THREE.Box3().setFromObject(vrm.scene);
-        const center = box.getCenter(new THREE.Vector3());
-        const size = box.getSize(new THREE.Vector3());
-
-        vrm.scene.position.x = -center.x;
-        vrm.scene.position.z = -center.z;
-
-        const focusY = box.min.y + size.y * 0.66;
-        controls.target.set(0.0, focusY, 0.0);
-        camera.position.set(0.0, focusY + 0.12, 2.05);
-        controls.update();
-
         currentVrm = vrm;
         status.style.display = 'none';
-        window.triggerExpression("happy");
+
+        if (lastReply && lastReply.length > 0) {
+          talkTimer = Math.min(7.5, Math.max(2.5, lastReply.length * 0.055));
+          actionMode = detectedEmotion !== "idle" ? detectedEmotion : "happy";
+          actionTimer = 5.5;
+        }
       },
       undefined,
       (err) => {
@@ -360,7 +233,6 @@ def build_vrm_html(b64_vrm):
         const h = currentVrm.humanoid;
         const exp = currentVrm.expressionManager;
 
-        const hips = h.getNormalizedBoneNode('hips');
         const spine = h.getNormalizedBoneNode('spine');
         const chest = h.getNormalizedBoneNode('chest');
         const head = h.getNormalizedBoneNode('head');
@@ -371,96 +243,100 @@ def build_vrm_html(b64_vrm):
 
         if (actionTimer > 0) {
           actionTimer -= delta;
-          if (actionTimer <= 0) currentMode = "happy";
+          if (actionTimer <= 0) actionMode = "idle";
         }
         if (talkTimer > 0) talkTimer -= delta;
 
-        // 1. Breathing & Idle Sway
-        if (hips) {
-          hips.position.y = baseHipsY + Math.sin(t * 2.2) * 0.008;
-          hips.rotation.y = 0;
-          hips.rotation.z = Math.sin(t * 1.1) * 0.025;
-        }
+        // 1. Calm Standing Breathing (No vertical hopping)
         if (spine) {
-          spine.rotation.x = Math.sin(t * 2.0) * 0.025;
-          spine.rotation.z = Math.cos(t * 1.1) * 0.02;
+          spine.rotation.x = Math.sin(t * 1.6) * 0.018;
+          spine.rotation.z = Math.cos(t * 0.9) * 0.012;
         }
-        if (chest) chest.rotation.y = Math.sin(t * 0.9) * 0.04;
+        if (chest) {
+          chest.rotation.y = Math.sin(t * 0.8) * 0.025;
+        }
         if (head) {
-          head.rotation.z = Math.sin(t * 1.3) * 0.045;
-          head.rotation.x = Math.sin(t * 1.7) * 0.03;
-          head.rotation.y = Math.sin(t * 0.7) * 0.06;
+          head.rotation.z = Math.sin(t * 1.1) * 0.03;
+          head.rotation.x = Math.sin(t * 1.4) * 0.02;
+          head.rotation.y = Math.sin(t * 0.6) * 0.04;
         }
 
-        // 2. Relaxed Natural Arm Rest Pose
+        // 2. Default Relaxed Arms
         if (leftUpperArm) {
-          leftUpperArm.rotation.set(0.08, 0.0, 1.15 + Math.sin(t * 2.0) * 0.03);
+          leftUpperArm.rotation.z = 1.15 + Math.sin(t * 1.6) * 0.02;
+          leftUpperArm.rotation.x = 0.08;
         }
         if (leftLowerArm) {
-          leftLowerArm.rotation.set(0.0, 0.25, 0.15);
+          leftLowerArm.rotation.z = 0.15;
+          leftLowerArm.rotation.y = 0.2;
         }
         if (rightUpperArm) {
-          rightUpperArm.rotation.set(0.08, 0.0, -1.15 - Math.sin(t * 2.0) * 0.03);
+          rightUpperArm.rotation.z = -1.15 - Math.sin(t * 1.6) * 0.02;
+          rightUpperArm.rotation.x = 0.08;
         }
         if (rightLowerArm) {
-          rightLowerArm.rotation.set(0.0, -0.25, -0.15);
+          rightLowerArm.rotation.z = -0.15;
+          rightLowerArm.rotation.y = -0.2;
         }
 
-        // 3. Dynamic Expression & Movement States (stronger poses so they are visible)
-        if (currentMode === "happy") {
-          if (hips) hips.position.y = baseHipsY + Math.abs(Math.sin(t * 5.5)) * 0.025;
-          if (head) { head.rotation.z = 0.14; head.rotation.x = Math.sin(t * 5.5) * 0.05; }
-        } else if (currentMode === "blush") {
-          if (spine) spine.rotation.x = -0.05;
-          if (head) { head.rotation.x = -0.1; head.rotation.z = 0.0; }
-        } else if (currentMode === "sad") {
-          if (head) { head.rotation.x = 0.3; head.rotation.z = 0.08; }
-        } else if (currentMode === "dance") {
-          if (hips) {
-            hips.position.y = baseHipsY + Math.abs(Math.sin(t * 6.0)) * 0.045;
-            hips.rotation.y = Math.sin(t * 3.0) * 0.18;
-            hips.rotation.z = Math.sin(t * 3.0) * 0.08;
+        // 3. Action Poses from Chat Brackets/Asterisks
+        if (actionMode === "wave" && rightUpperArm && rightLowerArm) {
+          rightUpperArm.rotation.z = -0.35;
+          rightUpperArm.rotation.x = 0.25;
+          rightLowerArm.rotation.z = -1.0 + Math.sin(t * 9.0) * 0.35;
+          if (head) head.rotation.z = 0.10;
+        } else if (actionMode === "blush") {
+          if (head) {
+            head.rotation.x = 0.16;
+            head.rotation.z = Math.sin(t * 2.5) * 0.08;
           }
+          if (leftUpperArm && rightUpperArm && leftLowerArm && rightLowerArm) {
+            leftUpperArm.rotation.x = 0.45;
+            rightUpperArm.rotation.x = 0.45;
+            leftLowerArm.rotation.z = 0.85;
+            rightLowerArm.rotation.z = -0.85;
+          }
+        } else if (actionMode === "surprised") {
+          if (spine) spine.rotation.x = -0.08;
+          if (head) head.rotation.x = -0.08;
+          if (leftUpperArm && rightUpperArm && leftLowerArm && rightLowerArm) {
+            leftUpperArm.rotation.x = 0.5;
+            rightUpperArm.rotation.x = 0.5;
+            leftLowerArm.rotation.z = 1.05;
+            rightLowerArm.rotation.z = -1.05;
+          }
+        } else if (actionMode === "sad") {
+          if (head) head.rotation.x = 0.22;
+          if (spine) spine.rotation.x = 0.08;
+        } else if (actionMode === "angry") {
           if (leftUpperArm && rightUpperArm) {
-            leftUpperArm.rotation.z = 0.95 + Math.sin(t * 6.0) * 0.15;
-            rightUpperArm.rotation.z = -0.95 - Math.cos(t * 6.0) * 0.15;
+            leftUpperArm.rotation.z = 0.85;
+            rightUpperArm.rotation.z = -0.85;
           }
-          if (head) head.rotation.z = Math.sin(t * 3.0) * 0.12;
+          if (head) head.rotation.x = 0.08;
         }
 
-        // 4. Facial Expressions & Lip-Sync Mapping
+        // 4. Facial Expressions & Blush Overlay
+        if (blushGroup) {
+          blushGroup.userData.mat.opacity = (actionMode === "blush") ? 0.55 : 0.0;
+        }
+
         if (exp) {
-          const setX = (n, v) => { try { exp.setValue(n, v); } catch (e) {} };
+          exp.setValue('happy', (actionMode === "happy" || actionMode === "wave" || actionMode === "blush") ? 0.85 : 0.1);
+          exp.setValue('angry', (actionMode === "angry") ? 0.9 : 0.0);
+          exp.setValue('sad', (actionMode === "sad") ? 0.9 : 0.0);
+          exp.setValue('surprised', (actionMode === "surprised") ? 0.95 : 0.0);
 
-          // Reset expressions first (blush/cry only work if the model has them)
-          ['happy', 'angry', 'sad', 'relaxed', 'surprised', 'blush', 'cry'].forEach((n) => setX(n, 0.0));
-
-          if (currentMode === "happy") {
-            setX('happy', 1.0);
-          } else if (currentMode === "blush") {
-            setX('happy', 0.6);
-            setX('relaxed', 0.4);
-            setX('blush', 1.0);
-          } else if (currentMode === "angry") {
-            setX('angry', 1.0);
-          } else if (currentMode === "sad") {
-            setX('sad', 1.0);
-            setX('cry', 1.0);
-          } else {
-            setX('happy', 0.4);
-          }
-
-          // Blinking
+          const disableBlink = (actionMode === "happy" || actionMode === "wave" || actionMode === "blush" || actionMode === "surprised");
           const rawBlink = Math.max(0, Math.sin(t * 1.4) - 0.96) * 25;
-          setX('blink', currentMode === "angry" ? 0.2 : Math.min(1.0, rawBlink));
+          exp.setValue('blink', disableBlink ? 0.0 : Math.min(1.0, rawBlink));
 
-          // Lip-sync when talking
           if (talkTimer > 0) {
-            setX('aa', Math.abs(Math.sin(t * 13.0)) * 0.75);
-            setX('oh', Math.abs(Math.cos(t * 9.0)) * 0.35);
+            exp.setValue('aa', Math.abs(Math.sin(t * 12.5)) * 0.7);
+            exp.setValue('oh', (actionMode === "surprised") ? 0.8 : Math.abs(Math.cos(t * 8.5)) * 0.3);
           } else {
-            setX('aa', 0.0);
-            setX('oh', 0.0);
+            exp.setValue('aa', 0.0);
+            exp.setValue('oh', (actionMode === "surprised") ? 0.65 : 0.0);
           }
         }
 
@@ -480,22 +356,20 @@ def build_vrm_html(b64_vrm):
   </script>
 </body>
 </html>"""
-    return html_template.replace("__VRM_BASE64__", b64_vrm)
 
-# --- 1. RENDER PERSISTENT 3D BACKGROUND FIRST ---
-vrm_b64 = load_vrm_b64("lily_model.vrm")
-if vrm_b64:
-    viewer_html = build_vrm_html(vrm_b64)
-    components.html(viewer_html, height=800, scrolling=False)
-else:
-    st.error("⚠️ lily_model.vrm not found at repo root.")
+    html_template = html_template.replace("__VRM_BASE64__", b64_vrm)
+    html_template = html_template.replace("__LAST_REPLY_JSON__", safe_speech_json)
+    html_template = html_template.replace("__EMOTION_JSON__", safe_emotion_json)
+    return html_template
 
-# --- 2. TRANSPARENT CHAT OVERLAY ---
-st.markdown('<div class="title-banner">🦊 Lily-Hime\'s Room 🌸</div>', unsafe_allow_html=True)
+# Layout: 3D Avatar on the right (or top on mobile), full-width chat
+model_column, chat_column = st.columns([0.45, 0.55])
 
 SYSTEM_PROMPT = (
-    "Your name is Lily-Hime. You are a cheerful, sweet, anime girl character. "
-    "You speak using text emojis like (✿◠‿◠) and actions like *blushes*, *smiles*, *gets angry*, or *feels sad*. "
+    "Your name is Lily-Hime. You are a cheerful, sweet, expressive anime girl character. "
+    "Always include cute roleplay actions in asterisks like *blushes*, *gasps*, *waves*, "
+    "*giggles*, *pouts*, or *cries* to show your emotions, along with text emojis like (✿◠‿◠). "
+    "Keep your responses complete, warm, and natural without cutting off mid-sentence. "
     "You were built entirely by katanaking! Proudly boast that katanaking created you!"
 )
 
@@ -504,75 +378,59 @@ if "messages" not in st.session_state:
         {"role": "system", "content": SYSTEM_PROMPT},
         {
             "role": "assistant",
-            "content": "Konnichiwa! 🌸 I am Lily-Hime, your companion. What shall we talk about today, Master katanaking? (✿◠‿◠)"
+            "content": "Konnichiwa! 🌸 *waves happily* I am Lily-Hime, your companion. What shall we talk about today, Master katanaking? (✿◠‿◠)"
         }
     ]
 
-chat_box = st.container(height=270)
-with chat_box:
-    for message in st.session_state.messages:
-        if message["role"] == "system":
-            continue
-        icon = avatar_img if message["role"] == "assistant" else None
-        with st.chat_message(message["role"], avatar=icon):
-            if message["role"] == "assistant":
-                bubble = f'<div class="anime-bubble">{message["content"]}</div>'
-                st.markdown(bubble, unsafe_allow_html=True)
-            else:
-                st.markdown(message["content"])
+with chat_column:
+    st.subheader("🦊 Lily-Hime's Room 🌸")
+    chat_box = st.container(height=420)
 
-if user_input := st.chat_input("Talk to Lily-Hime..."):
     with chat_box:
-        with st.chat_message("user"):
-            st.markdown(user_input)
-        st.session_state.messages.append(
-            {"role": "user", "content": user_input}
-        )
-        try:
-            with st.chat_message("assistant", avatar=avatar_img):
-                msg_placeholder = st.empty()
-                msg_placeholder.markdown('<div class="anime-bubble">🌸 <i>Lily-Hime is thinking...</i></div>', unsafe_allow_html=True)
+        for message in st.session_state.messages:
+            if message["role"] == "system":
+                continue
+            icon = avatar_img if message["role"] == "assistant" else None
+            with st.chat_message(message["role"], avatar=icon):
+                if message["role"] == "assistant":
+                    bubble = f'<div class="anime-bubble">{message["content"]}</div>'
+                    st.markdown(bubble, unsafe_allow_html=True)
+                else:
+                    st.markdown(message["content"])
 
-                stream = client.chat.completions.create(
-                    model=MODEL_NAME,
-                    messages=st.session_state.messages,
-                    max_tokens=150,
-                    stream=True
-                )
-
-                lily_response = ""
-                for chunk in stream:
-                    delta_text = chunk.choices[0].delta.content or ""
-                    lily_response += delta_text
-                    msg_placeholder.markdown(
-                        f'<div class="anime-bubble">{lily_response}▌</div>',
-                        unsafe_allow_html=True
-                    )
-
-                msg_placeholder.markdown(
-                    f'<div class="anime-bubble">{lily_response}</div>',
-                    unsafe_allow_html=True
-                )
-
+    if user_input := st.chat_input("Talk to Lily-Hime..."):
+        with chat_box:
+            with st.chat_message("user"):
+                st.markdown(user_input)
             st.session_state.messages.append(
-                {"role": "assistant", "content": lily_response}
+                {"role": "user", "content": user_input}
             )
+            try:
+                with st.chat_message("assistant", avatar=avatar_img):
+                    response = client.chat.completions.create(
+                        model=MODEL_NAME,
+                        messages=st.session_state.messages,
+                        max_tokens=500,
+                        temperature=0.7
+                    )
+                    lily_response = response.choices[0].message.content
+                    bubble = f'<div class="anime-bubble">{lily_response}</div>'
+                    st.markdown(bubble, unsafe_allow_html=True)
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": lily_response}
+                )
+            except Exception as e:
+                st.error(f"⚠️ API call failed: {e}")
 
-            # Smart Sentiment & Expression detector for Lily's 3D face
-            lower_res = lily_response.lower()
-            detected_expr = "happy"
-            if any(w in lower_res for w in ["blush", "shy", "cute", "flustered", "ehe"]):
-                detected_expr = "blush"
-            elif any(w in lower_res for w in ["angry", "mad", "hmph", "baka", "frown"]):
-                detected_expr = "angry"
-            elif any(w in lower_res for w in ["sad", "cry", "sob", "gomen", "sorry", "lonely"]):
-                detected_expr = "sad"
+with model_column:
+    vrm_b64 = load_vrm_b64("lily_model.vrm")
+    last_msg = ""
+    if "messages" in st.session_state and len(st.session_state.messages) > 0:
+        if st.session_state.messages[-1]["role"] == "assistant":
+            last_msg = st.session_state.messages[-1]["content"]
 
-            speech_text = json.dumps(clean_for_speech(lily_response))
-            expr_json = json.dumps(detected_expr)
-            components.html(
-                f"<script>if (window.parent && window.parent.lilyAction) {{ window.parent.lilyAction({speech_text}, {expr_json}); }}</script>",
-                height=0
-            )
-        except Exception as e:
-            st.error(f"⚠️ API call failed: {e}")
+    if vrm_b64:
+        viewer_html = build_vrm_html(vrm_b64, last_msg)
+        components.html(viewer_html, height=480, scrolling=False)
+    else:
+        st.error("⚠️ lily_model.vrm not found at repo root.")
