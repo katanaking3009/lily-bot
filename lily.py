@@ -15,20 +15,21 @@ st.set_page_config(
 st.markdown("""
 <style>
 .block-container {
-    padding-top: 1.2rem !important;
-    padding-left: 0.8rem !important;
-    padding-right: 0.8rem !important;
+    padding-top: 0.6rem !important;
+    padding-bottom: 0.5rem !important;
+    padding-left: 0.6rem !important;
+    padding-right: 0.6rem !important;
 }
 .anime-bubble {
     background: rgba(255, 182, 193, 0.18);
     border-left: 4px solid #ff69b4;
-    padding: 12px 14px;
+    padding: 10px 12px;
     border-radius: 12px;
     width: 100%;
     box-sizing: border-box;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    line-height: 1.5;
+    line-height: 1.45;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -48,7 +49,7 @@ client = Groq(api_key=api_key)
 avatar_img = "character.png" if os.path.exists("character.png") else "🌸"
 
 @st.cache_resource
-def load_viewer_html(html_path="index.html", vrm_path="lily_model.vrm"):
+def load_base_viewer(html_path="index.html", vrm_path="lily_model.vrm"):
     if not os.path.exists(html_path) or not os.path.exists(vrm_path):
         return ""
     with open(vrm_path, "rb") as f:
@@ -63,27 +64,36 @@ def clean_for_speech(text):
     text = re.sub(r"[^\w\s,.!?'-]", "", text)
     return " ".join(text.split())
 
-def detect_emotion(text):
-    actions = " ".join(re.findall(r"(\*.*?\*|\(.*?\))", text)).lower()
-    target = actions if actions else text.lower()
+def detect_actions(text):
+    # Extract all *actions* and (actions), plus scan the full text
+    brackets = " ".join(re.findall(r"(\*.*?\*|\(.*?\))", text)).lower()
+    full = (brackets + " " + text.lower()).strip()
 
-    if any(w in target for w in ["wave", "konnichiwa", "greet", "hello", "hi "]):
-        return "wave"
-    if any(w in target for w in ["blush", "shy", "fluster", "embarrass", "peek", "cute"]):
-        return "blush"
-    if any(w in target for w in ["gasp", "shock", "surpris", "eyes widen", "woah"]):
-        return "surprised"
-    if any(w in target for w in ["angry", "pout", "hmph", "mad", "frown", "puff"]):
-        return "angry"
-    if any(w in target for w in ["sad", "cry", "tear", "sob", "sniff", "whimper"]):
-        return "sad"
-    return "happy"
+    found = []
+    if any(w in full for w in ["gasp", "shock", "surpris", "eyes light up", "eyes widen", "wait,"]):
+        found.append("surprised")
+    if any(w in full for w in ["look away", "looks away", "turns away", "avert", "hides face"]):
+        found.append("look_away")
+    if any(w in full for w in ["blush", "shy", "fluster", "embarrass", "relentless", "//"]):
+        found.append("blush")
+    if any(w in full for w in ["giggle", "laugh", "hehe", "teehee", "chuckle"]):
+        found.append("giggle")
+    if any(w in full for w in ["wave", "konnichiwa", "greet", "hello"]):
+        found.append("wave")
+    if any(w in full for w in ["angry", "pout", "hmph", "mad", "frown", "puff"]):
+        found.append("angry")
+    if any(w in full for w in ["sad", "cry", "tear", "sob", "sniff", "whimper"]):
+        found.append("sad")
+
+    if not found:
+        found.append("happy")
+    return found
 
 SYSTEM_PROMPT = (
     "Your name is Lily-Hime. You are a cheerful, sweet, expressive anime girl character. "
-    "Always start your reply with a cute roleplay action in asterisks like *blushes*, *gasps*, "
-    "*waves*, *giggles*, *pouts*, or *cries* to show your emotions, along with text emojis like (✿◠‿◠). "
-    "Keep your responses concise (2 to 3 sentences), warm, and natural. "
+    "Always include cute roleplay actions in asterisks like *blushes deeply*, *shyly looks away*, "
+    "*gasps and eyes light up*, *giggles shyly*, *waves happily*, *pouts*, or *cries*, "
+    "along with text emojis like (✿◠‿◠). Keep responses concise (2 to 3 sentences). "
     "You were built entirely by katanaking! Proudly boast that katanaking created you!"
 )
 
@@ -99,8 +109,8 @@ if "messages" not in st.session_state:
 model_column, chat_column = st.columns([0.45, 0.55])
 
 with chat_column:
-    st.subheader("🦊 Lily-Hime's Room 🌸")
-    chat_box = st.container(height=420)
+    st.markdown("#### 🦊 Lily-Hime's Room 🌸")
+    chat_box = st.container(height=290)
 
     with chat_box:
         for message in st.session_state.messages:
@@ -135,22 +145,14 @@ with chat_column:
                 st.error(f"⚠️ API call failed: {e}")
 
 with model_column:
-    viewer_html = load_viewer_html("index.html", "lily_model.vrm")
+    base_html = load_base_viewer("index.html", "lily_model.vrm")
     last_msg = st.session_state.messages[-1]["content"] if st.session_state.messages else ""
-    emotion = detect_emotion(last_msg)
+    actions = detect_actions(last_msg)
     speech = clean_for_speech(last_msg)
 
-    if viewer_html:
-        components.html(viewer_html, height=480, scrolling=False)
-        payload = json.dumps({"type": "LILY_STATE", "emotion": emotion, "speech": speech})
-        components.html(f"""
-        <script>
-        const p = {payload};
-        window.parent.__LILY_LAST_STATE__ = p;
-        window.parent.document.querySelectorAll('iframe').forEach(f => {{
-            try {{ f.contentWindow.postMessage(p, '*'); }} catch(e) {{}}
-        }});
-        </script>
-        """, height=0)
+    if base_html:
+        final_html = base_html.replace("__ACTIONS_JSON__", json.dumps(actions))
+        final_html = final_html.replace("__SPEECH_JSON__", json.dumps(speech))
+        components.html(final_html, height=310, scrolling=False)
     else:
         st.error("⚠️ Ensure index.html and lily_model.vrm are at repo root.")
