@@ -22,6 +22,8 @@
       font-size: 12px;
       font-weight: bold;
       z-index: 10;
+      max-width: 90vw;
+      word-break: break-all;
     }
     #emotion-badge {
       position: absolute;
@@ -104,6 +106,13 @@
 
     const b64 = "__VRM_BASE64__";
     const bin = atob(b64);
+    
+    // Check if base64 decodes into a Git LFS text pointer instead of binary
+    const prefixCheck = new TextDecoder().decode(new Uint8Array(bin.slice(0, 30)));
+    if (prefixCheck.includes("version https://git-lfs")) {
+      status.textContent = "⚠️ LFS Pointer Error: Re-upload lily_avatar.vrm as a raw binary file!";
+    }
+
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
@@ -432,7 +441,7 @@
       },
       undefined,
       (err) => {
-        status.textContent = "⚠️ Error loading VRM";
+        status.textContent = "⚠️ Error: " + err.message;
         console.error(err);
       }
     );
