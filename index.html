@@ -106,13 +106,6 @@
 
     const b64 = "__VRM_BASE64__";
     const bin = atob(b64);
-    
-    // Check if base64 decodes into a Git LFS text pointer instead of binary
-    const prefixCheck = new TextDecoder().decode(new Uint8Array(bin.slice(0, 30)));
-    if (prefixCheck.includes("version https://git-lfs")) {
-      status.textContent = "⚠️ LFS Pointer Error: Re-upload lily_avatar.vrm as a raw binary file!";
-    }
-
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
@@ -219,7 +212,10 @@
       const innerMat = new THREE.MeshBasicMaterial({ color: 0xff4da6 });
 
       const lEar = new THREE.Group();
-      lEar.add(new THREE.Mesh(outerGeo, outerMat), Object.assign(new THREE.Mesh(innerGeo, innerMat), {position: new THREE.Vector3(0, -0.005, 0.012)}));
+      const outerMesh = new THREE.Mesh(outerGeo, outerMat);
+      const innerMesh = new THREE.Mesh(innerGeo, innerMat);
+      innerMesh.position.set(0, -0.005, 0.012);
+      lEar.add(outerMesh, innerMesh);
       lEar.position.set(0.068, 0.175, 0.01);
       lEar.rotation.set(0.1, 0.2, -0.32);
 
