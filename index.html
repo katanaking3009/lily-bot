@@ -554,4 +554,88 @@
             spineY = Math.sin(t * 3.2) * 0.14;
             headX = 0.22;
             headZ = 0.16 + Math.sin(t * 3.5) * 0.06;
-            lUp = [0.50, 0.
+            lUp = [0.50, 0.35, 0.82];
+            rUp = [0.50, -0.35, -0.82];
+            lLow = [0.25, -1.25, -1.12];
+            rLow = [0.25, 1.25, 1.12];
+          }
+          if (has("look_away")) {
+            headY = 0.62;
+            headX = 0.25;
+            spineY = -0.18;
+          }
+          if (has("giggle") || has("happy")) {
+            headZ = Math.sin(t * 6.5) * 0.055;
+            headX = Math.sin(t * 10.0) * 0.02;
+            spineY = Math.sin(t * 4.5) * 0.045;
+          }
+          if (has("sad")) {
+            headX = 0.32;
+            spineX = 0.14;
+          }
+          if (has("angry")) {
+            headX = 0.12;
+            headY = -0.25;
+            lUp = [0.2, 0.0, 0.70];
+            rUp = [0.2, 0.0, -0.70];
+            lLow = [0.0, -0.85, -0.75];
+            rLow = [0.0, 0.85, 0.75];
+          }
+        }
+
+        if (spine) spine.rotation.set(spineX, spineY, spineZ);
+        if (chest) chest.rotation.set(0.0, spineY * 0.5, 0.0);
+        if (neck) neck.rotation.set(headX * 0.35, headY * 0.35, 0.0);
+        if (head) head.rotation.set(headX, headY, headZ);
+
+        if (leftUpperArm) leftUpperArm.rotation.set(...lUp);
+        if (rightUpperArm) rightUpperArm.rotation.set(...rUp);
+        if (leftLowerArm) leftLowerArm.rotation.set(...lLow);
+        if (rightLowerArm) rightLowerArm.rotation.set(...rLow);
+        if (leftHand) leftHand.rotation.set(...lHnd);
+        if (rightHand) rightHand.rotation.set(...rHnd);
+
+        if (blushGroup) {
+          const showBlush = touchReaction || has("blush") || has("giggle") || has("look_away");
+          blushGroup.userData.mat.opacity = showBlush ? (0.85 + Math.sin(t * 4.0) * 0.15) : 0.0;
+        }
+
+        if (exp) {
+          const isHappy = touchReaction || (!inGaspPhase && (has("happy") || has("giggle") || has("wave") || has("blush")));
+          setExp(exp, ['happy', 'joy', 'fun'], isHappy ? 1.0 : 0.0);
+          setExp(exp, ['surprised'], inGaspPhase ? 1.0 : 0.0);
+          setExp(exp, ['angry'], has("angry") ? 1.0 : 0.0);
+          setExp(exp, ['sad', 'sorrow'], has("sad") ? 1.0 : 0.0);
+
+          const disableBlink = isHappy || inGaspPhase;
+          const rawBlink = Math.max(0, Math.sin(t * 1.5) - 0.96) * 25;
+          setExp(exp, ['blink'], disableBlink ? 0.0 : Math.min(1.0, rawBlink));
+
+          if (inGaspPhase) {
+            setExp(exp, ['oh', 'o'], 0.95);
+            setExp(exp, ['aa', 'a'], 0.45);
+          } else if (talkTimer > 0) {
+            setExp(exp, ['aa', 'a'], Math.abs(Math.sin(t * 13.5)) * 0.8);
+            setExp(exp, ['oh', 'o'], Math.abs(Math.cos(t * 9.0)) * 0.35);
+          } else {
+            setExp(exp, ['aa', 'a'], 0.0);
+            setExp(exp, ['oh', 'o'], 0.0);
+          }
+        }
+
+        currentVrm.update(delta);
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>
