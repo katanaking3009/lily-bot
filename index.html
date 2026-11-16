@@ -95,7 +95,6 @@
     controls.enableDamping = true;
     controls.update();
 
-    // Smooth Camera Preset Targets
     const camPosTarget = new THREE.Vector3(0.0, 1.33, 1.55);
     const ctrlTarget = new THREE.Vector3(0.0, 1.25, 0.0);
 
@@ -105,12 +104,16 @@
     scene.add(dirLight);
     scene.add(new THREE.AmbientLight(0xffffff, 0.55));
 
-    // Decode VRM once
-    const b64 = "__VRM_BASE64__";
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+    // Secure local caching via localStorage (immune to cross-origin security blocks)
+    let blobUrl = localStorage.getItem('lily_blob_url');
+    if (!blobUrl) {
+      const b64 = "__VRM_BASE64__";
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+      try { localStorage.setItem('lily_blob_url', blobUrl); } catch(e) {}
+    }
 
     let currentVrm = null;
     let blushGroup = null;
@@ -124,9 +127,6 @@
     const pointer = new THREE.Vector2(0, 0);
     const raycaster = new THREE.Raycaster();
 
-    // ==========================================
-    // 1. 3D FLOATING PARTICLE ENGINE
-    // ==========================================
     function makeParticleTexture(mode) {
       const c = document.createElement('canvas');
       c.width = 64; c.height = 64;
@@ -147,7 +147,6 @@
         ctx.fillStyle = g;
         ctx.fillRect(0, 0, 64, 64);
       } else {
-        // Sakura Petals 🌸
         ctx.fillStyle = "#ffb3d1";
         ctx.beginPath();
         ctx.ellipse(32, 32, 18, 10, Math.PI / 4, 0, Math.PI * 2);
@@ -176,9 +175,6 @@
     scene.add(particleSystem);
     let currentParticleMode = "Sakura Petals 🌸";
 
-    // ==========================================
-    // 2. 3D ACCESSORIES & BLUSH BUILDERS
-    // ==========================================
     function createAnimeBlush(headObj) {
       const canvas = document.createElement('canvas');
       canvas.width = 128; canvas.height = 64;
@@ -214,7 +210,6 @@
     }
 
     function createAccessories(headObj) {
-      // 1. Cyber Neko Ears
       const nekoGroup = new THREE.Group();
       const outerGeo = new THREE.ConeGeometry(0.045, 0.095, 4);
       const outerMat = new THREE.MeshStandardMaterial({ color: 0x22222b, roughness: 0.4 });
@@ -222,10 +217,7 @@
       const innerMat = new THREE.MeshBasicMaterial({ color: 0xff4da6 });
 
       const lEar = new THREE.Group();
-      const lOut = new THREE.Mesh(outerGeo, outerMat);
-      const lIn = new THREE.Mesh(innerGeo, innerMat);
-      lIn.position.set(0, -0.005, 0.012);
-      lEar.add(lOut, lIn);
+      lEar.add(new THREE.Mesh(outerGeo, outerMat), Object.assign(new THREE.Mesh(innerGeo, innerMat), {position: new THREE.Vector3(0, -0.005, 0.012)}));
       lEar.position.set(0.068, 0.175, 0.01);
       lEar.rotation.set(0.1, 0.2, -0.32);
 
@@ -236,7 +228,6 @@
       nekoGroup.visible = false;
       headObj.add(nekoGroup);
 
-      // 2. Glowing Halo
       const haloGeo = new THREE.TorusGeometry(0.085, 0.007, 16, 48);
       const haloMat = new THREE.MeshBasicMaterial({ color: 0xffe66d });
       const haloMesh = new THREE.Mesh(haloGeo, haloMat);
@@ -245,7 +236,6 @@
       haloMesh.visible = false;
       headObj.add(haloMesh);
 
-      // 3. Stylish Glasses
       const glassesGroup = new THREE.Group();
       const rimMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
       const lRim = new THREE.Mesh(new THREE.RingGeometry(0.022, 0.026, 24), rimMat);
@@ -304,9 +294,7 @@
         utter.pitch = 1.45;
         utter.rate = 1.05;
         const voices = window.speechSynthesis.getVoices();
-        const fem = voices.find(v =>
-          v.name.includes("Female") || v.name.includes("Zira") || v.name.includes("Samantha")
-        );
+        const fem = voices.find(v => v.name.includes("Female") || v.name.includes("Zira") || v.name.includes("Samantha"));
         if (fem) utter.voice = fem;
         utter.onstart = () => { talkTimer = 12.0; };
         utter.onend = () => { talkTimer = 0.0; };
@@ -345,9 +333,6 @@
       }
     });
 
-    // ==========================================
-    // 3. ZERO-RELOAD BROADCAST CHANNEL RECEIVER
-    // ==========================================
     window.applyLilyPayload = (data) => {
       if (!data) return;
 
@@ -410,7 +395,6 @@
       }
     };
 
-    // Listen to BroadcastChannel (works across isolated Streamlit iframes with 0ms lag!)
     try {
       const bc = new BroadcastChannel('lily_channel');
       bc.onmessage = (ev) => window.applyLilyPayload(ev.data);
@@ -470,11 +454,9 @@
       const delta = Math.min(clock.getDelta(), 0.05);
       const t = clock.getElapsedTime();
 
-      // Smooth Camera Framing Interpolation
       camera.position.lerp(camPosTarget, 0.08);
       controls.target.lerp(ctrlTarget, 0.08);
 
-      // Animate Floating 3D Particles
       if (particleSystem.visible) {
         const posArr = particleSystem.geometry.attributes.position.array;
         const isRising = currentParticleMode.includes("Hearts");
