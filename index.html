@@ -71,7 +71,6 @@
     const status = document.getElementById('status');
     const badge = document.getElementById('emotion-badge');
 
-    // Dynamic Time-of-Day Background
     const hour = new Date().getHours();
     if (hour >= 18 || hour < 6) {
       document.body.style.setProperty('--bg-gradient', 'radial-gradient(circle at 50% 35%, #1a102f 0%, #0d061a 100%)');
@@ -122,10 +121,8 @@
     let lastSpokenText = "";
     let headpatActive = false;
 
-    // Interactive Gaze Tracking pointer coords
     const pointer = new THREE.Vector2(0, 0);
     const raycaster = new THREE.Raycaster();
-    let headNode = null;
 
     function createAnimeBlush(headObj) {
       const canvas = document.createElement('canvas');
@@ -195,7 +192,6 @@
       } catch (e) {}
     }
 
-    // Headpat & Touch Interaction
     window.addEventListener('pointermove', (e) => {
       pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
       pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
@@ -209,7 +205,6 @@
       if (currentVrm) {
         const hits = raycaster.intersectObject(currentVrm.scene, true);
         if (hits.length > 0) {
-          // Trigger headpat reaction!
           headpatActive = true;
           actionDuration = 5.0;
           activeActionsList = ["blush", "giggle"];
@@ -262,7 +257,7 @@
         VRMUtils.rotateVRM0(vrm);
         vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
 
-        headNode = vrm.humanoid?.getNormalizedBoneNode('head');
+        const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
         if (headNode) {
           blushGroup = createAnimeBlush(headNode);
         }
@@ -309,8 +304,6 @@
         const chest = h.getNormalizedBoneNode('chest');
         const neck = h.getNormalizedBoneNode('neck');
         const head = h.getNormalizedBoneNode('head');
-        const leftShoulder = h.getNormalizedBoneNode('leftShoulder');
-        const rightShoulder = h.getNormalizedBoneNode('rightShoulder');
         const leftUpperArm = h.getNormalizedBoneNode('leftUpperArm');
         const rightUpperArm = h.getNormalizedBoneNode('rightUpperArm');
         const leftLowerArm = h.getNormalizedBoneNode('leftLowerArm');
@@ -332,7 +325,6 @@
         let headY = Math.sin(t * 0.6) * 0.03;
         let headZ = Math.sin(t * 1.1) * 0.025;
 
-        // Interactive Gaze Tracking: Eyes/Head tilt toward cursor/finger pointer
         if (head && !headpatActive) {
           head.rotation.y += pointer.x * 0.35;
           head.rotation.x -= pointer.y * 0.25;
@@ -383,13 +375,10 @@
             spineY = -0.18;
           }
           if (has("giggle") || has("happy")) {
-            const laughBounce = Math.abs(Math.sin(t * 11.0)) * 0.06;
-            spineX += laughBounce;
-            headZ = Math.sin(t * 5.5) * 0.12;
-            if (leftShoulder && rightShoulder) {
-              leftShoulder.rotation.z = laughBounce * 1.5;
-              rightShoulder.rotation.z = -laughBounce * 1.5;
-            }
+            // SMOOTH, natural giggle sway instead of sharp jittery bouncing
+            headZ = Math.sin(t * 7.0) * 0.06;
+            headX = Math.sin(t * 11.0) * 0.025;
+            spineY = Math.sin(t * 5.0) * 0.05;
           }
           if (has("sad")) {
             headX = 0.32;
