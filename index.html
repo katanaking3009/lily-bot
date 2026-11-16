@@ -3,12 +3,50 @@
 <head>
   <meta charset="utf-8">
   <style>
-    body { margin: 0; overflow: hidden; background: transparent; font-family: sans-serif; }
-    canvas { width: 100vw; height: 100vh; display: block; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: var(--bg-gradient, radial-gradient(circle at 50% 35%, #fff0f6 0%, #ffd6e7 100%));
+      font-family: sans-serif;
+      transition: background 1s ease;
+    }
+    canvas { width: 100vw; height: 100vh; display: block; cursor: pointer; }
     #status {
-      position: absolute; top: 12px; left: 12px;
-      background: rgba(255, 255, 255, 0.9); color: #d63384;
-      padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: bold;
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      color: #d63384;
+      padding: 5px 11px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      z-index: 10;
+    }
+    #emotion-badge {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(255, 255, 255, 0.92);
+      color: #c2185b;
+      padding: 5px 12px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: bold;
+      box-shadow: 0 2px 8px rgba(255, 105, 180, 0.25);
+      z-index: 10;
+    }
+    #sound-hint {
+      position: absolute;
+      bottom: 8px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.82);
+      color: #ad1457;
+      padding: 4px 9px;
+      border-radius: 12px;
+      font-size: 11px;
+      pointer-events: none;
+      z-index: 10;
     }
   </style>
   <script type="importmap">
@@ -23,6 +61,9 @@
 </head>
 <body>
   <div id="status">🌸 Summoning Lily-Hime...</div>
+  <div id="emotion-badge">✨ Ready</div>
+  <div id="sound-hint">🔊 Tap Lily for voice / reaction</div>
+
   <script type="module">
     import * as THREE from 'three';
     import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -30,24 +71,37 @@
     import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 
     const status = document.getElementById('status');
+    const badge = document.getElementById('emotion-badge');
+
+    const hour = new Date().getHours();
+    if (hour >= 18 || hour < 6) {
+      document.body.style.setProperty('--bg-gradient', 'radial-gradient(circle at 50% 35%, #1a102f 0%, #0d061a 100%)');
+    } else if (hour >= 16) {
+      document.body.style.setProperty('--bg-gradient', 'radial-gradient(circle at 50% 35%, #ffe3d0 0%, #ffb6c1 100%)');
+    }
+
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 0.95;
     document.body.appendChild(renderer.domElement);
 
-    const camera = new THREE.PerspectiveCamera(28.0, window.innerWidth / window.innerHeight, 0.1, 20.0);
-    camera.position.set(0.0, 1.32, 1.85);
+    const camera = new THREE.PerspectiveCamera(26.0, window.innerWidth / window.innerHeight, 0.1, 20.0);
+    camera.position.set(0.0, 1.33, 1.55);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0.0, 1.20, 0.0);
+    controls.target.set(0.0, 1.25, 0.0);
     controls.enableDamping = true;
     controls.update();
 
+    const camPosTarget = new THREE.Vector3(0.0, 1.33, 1.55);
+    const ctrlTarget = new THREE.Vector3(0.0, 1.25, 0.0);
+
     const scene = new THREE.Scene();
-    scene.add(new THREE.DirectionalLight(0xffffff, 1.2));
+    scene.add(new THREE.DirectionalLight(0xfff5f8, 1.35));
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-    // Direct Base64 decoding (100% reliable, zero caching bugs)
     const b64 = "__VRM_BASE64__";
     const bin = atob(b64);
     const bytes = new Uint8Array(bin.length);
@@ -55,37 +109,498 @@
     const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
 
     let currentVrm = null;
-    const loader = new GLTFLoader();
-    loader.register((parser) => new VRMLoaderPlugin(parser));
+    let blushGroup = null;
+    let accObjects = {};
+    let activeActionsList = ["wave"];
+    let talkTimer = 0;
+    let actionDuration = 5.0;
+    let lastSpokenText = "";
+    let touchReaction = false;
 
-    loader.load(blobUrl, (gltf) => {
-      const vrm = gltf.userData.vrm;
-      VRMUtils.removeUnnecessaryVertices(gltf.scene);
-      VRMUtils.rotateVRM0(vrm);
-      vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
+    const pointer = new THREE.Vector2(0, 0);
+    const raycaster = new THREE.Raycaster();
 
-      // Relax arms down naturally
-      const h = vrm.humanoid;
-      const lArm = h?.getNormalizedBoneNode('leftUpperArm');
-      const rArm = h?.getNormalizedBoneNode('rightUpperArm');
-      if (lArm) lArm.rotation.z = 1.18;
-      if (rArm) rArm.rotation.z = -1.18;
+    function makeParticleTexture(mode) {
+      const c = document.createElement('canvas');
+      c.width = 64; c.height = 64;
+      const ctx = c.getContext('2d');
+      ctx.clearRect(0, 0, 64, 64);
 
-      scene.add(vrm.scene);
-      currentVrm = vrm;
-      status.style.display = 'none';
-    }, undefined, (err) => {
-      status.textContent = "Error loading VRM";
-      console.error(err);
+      if (mode === "Hearts 💖") {
+        ctx.fillStyle = "#ff3377";
+        ctx.font = "44px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("❤", 32, 34);
+      } else if (mode === "Sparkles ✨") {
+        const g = ctx.createRadialGradient(32, 32, 2, 32, 32, 28);
+        g.addColorStop(0, "rgba(255, 255, 220, 1)");
+        g.addColorStop(0.4, "rgba(255, 215, 0, 0.8)");
+        g.addColorStop(1, "rgba(255, 215, 0, 0)");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 64, 64);
+      } else {
+        ctx.fillStyle = "#ffb3d1";
+        ctx.beginPath();
+        ctx.ellipse(32, 32, 18, 10, Math.PI / 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      return new THREE.CanvasTexture(c);
+    }
+
+    const pCount = 36;
+    const pGeo = new THREE.BufferGeometry();
+    const pPos = new Float32Array(pCount * 3);
+    for (let i = 0; i < pCount; i++) {
+      pPos[i * 3] = (Math.random() - 0.5) * 2.2;
+      pPos[i * 3 + 1] = Math.random() * 2.2;
+      pPos[i * 3 + 2] = (Math.random() - 0.5) * 1.2 - 0.2;
+    }
+    pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+    const pMat = new THREE.PointsMaterial({
+      size: 0.085,
+      map: makeParticleTexture("Sakura Petals 🌸"),
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false
+    });
+    const particleSystem = new THREE.Points(pGeo, pMat);
+    scene.add(particleSystem);
+    let currentParticleMode = "Sakura Petals 🌸";
+
+    function createAnimeBlush(headObj) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128; canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      const grad = ctx.createRadialGradient(64, 32, 4, 64, 32, 54);
+      grad.addColorStop(0, 'rgba(255, 45, 115, 0.95)');
+      grad.addColorStop(0.6, 'rgba(255, 80, 140, 0.55)');
+      grad.addColorStop(1, 'rgba(255, 80, 140, 0.0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 128, 64);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      const geo = new THREE.PlaneGeometry(0.068, 0.036);
+      const mat = new THREE.MeshBasicMaterial({
+        map: tex, transparent: true, opacity: 0.0, depthWrite: false, depthTest: false
+      });
+
+      const group = new THREE.Group();
+      const leftCheek = new THREE.Mesh(geo, mat);
+      leftCheek.position.set(0.052, -0.005, 0.098);
+      leftCheek.rotation.y = 0.22;
+      leftCheek.renderOrder = 999;
+
+      const rightCheek = new THREE.Mesh(geo, mat);
+      rightCheek.position.set(-0.052, -0.005, 0.098);
+      rightCheek.rotation.y = -0.22;
+      rightCheek.renderOrder = 999;
+
+      group.add(leftCheek, rightCheek);
+      group.userData.mat = mat;
+      headObj.add(group);
+      return group;
+    }
+
+    function createAccessories(headObj) {
+      const nekoGroup = new THREE.Group();
+      const outerGeo = new THREE.ConeGeometry(0.045, 0.095, 4);
+      const outerMat = new THREE.MeshStandardMaterial({ color: 0x22222b, roughness: 0.4 });
+      const innerGeo = new THREE.ConeGeometry(0.028, 0.075, 4);
+      const innerMat = new THREE.MeshBasicMaterial({ color: 0xff4da6 });
+
+      const lEar = new THREE.Group();
+      lEar.add(new THREE.Mesh(outerGeo, outerMat), Object.assign(new THREE.Mesh(innerGeo, innerMat), {position: new THREE.Vector3(0, -0.005, 0.012)}));
+      lEar.position.set(0.068, 0.175, 0.01);
+      lEar.rotation.set(0.1, 0.2, -0.32);
+
+      const rEar = lEar.clone();
+      rEar.position.set(-0.068, 0.175, 0.01);
+      rEar.rotation.set(0.1, -0.2, 0.32);
+      nekoGroup.add(lEar, rEar);
+      nekoGroup.visible = false;
+      headObj.add(nekoGroup);
+
+      const haloGeo = new THREE.TorusGeometry(0.085, 0.007, 16, 48);
+      const haloMat = new THREE.MeshBasicMaterial({ color: 0xffe66d });
+      const haloMesh = new THREE.Mesh(haloGeo, haloMat);
+      haloMesh.rotation.x = Math.PI / 2 - 0.15;
+      haloMesh.position.set(0, 0.23, 0.0);
+      haloMesh.visible = false;
+      headObj.add(haloMesh);
+
+      const glassesGroup = new THREE.Group();
+      const rimMat = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
+      const lRim = new THREE.Mesh(new THREE.RingGeometry(0.022, 0.026, 24), rimMat);
+      lRim.position.set(0.036, 0.026, 0.106);
+      const rRim = new THREE.Mesh(new THREE.RingGeometry(0.022, 0.026, 24), rimMat);
+      rRim.position.set(-0.036, 0.026, 0.106);
+      const bridge = new THREE.Mesh(new THREE.PlaneGeometry(0.024, 0.004), rimMat);
+      bridge.position.set(0, 0.028, 0.107);
+      glassesGroup.add(lRim, rRim, bridge);
+      glassesGroup.visible = false;
+      headObj.add(glassesGroup);
+
+      return { neko: nekoGroup, halo: haloMesh, glasses: glassesGroup };
+    }
+
+    function applyOutfitTint(vrm, tintName) {
+      if (!vrm) return;
+      const colorMap = {
+        "Original Pink 🌸": new THREE.Color(1.0, 1.0, 1.0),
+        "Midnight Goth 🖤": new THREE.Color(0.38, 0.28, 0.48),
+        "Cyber Cyan 💙": new THREE.Color(0.65, 0.95, 1.0),
+        "Crimson Red ❤️": new THREE.Color(1.0, 0.48, 0.52),
+        "Emerald Mint 💚": new THREE.Color(0.68, 1.0, 0.82)
+      };
+      const targetColor = colorMap[tintName] || colorMap["Original Pink 🌸"];
+
+      vrm.scene.traverse((obj) => {
+        if (obj.isMesh && obj.material) {
+          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+          mats.forEach((m) => {
+            const mName = (m.name || "").toLowerCase();
+            const oName = (obj.name || "").toLowerCase();
+            const isBodyOrHair = mName.includes("face") || mName.includes("skin") || mName.includes("eye") || mName.includes("hair") || oName.includes("face") || oName.includes("hair");
+            if (!isBodyOrHair && m.color) {
+              m.color.copy(targetColor);
+            }
+          });
+        }
+      });
+    }
+
+    function setExp(exp, names, val) {
+      if (!exp) return;
+      for (const n of names) {
+        try { exp.setValue(n, val); } catch (e) {}
+      }
+    }
+
+    function speakNow(text) {
+      if (!text || !('speechSynthesis' in window)) return;
+      if (text === lastSpokenText) return;
+      lastSpokenText = text;
+      try {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.pitch = 1.45;
+        utter.rate = 1.05;
+        const voices = window.speechSynthesis.getVoices();
+        const fem = voices.find(v => v.name.includes("Female") || v.name.includes("Zira") || v.name.includes("Samantha"));
+        if (fem) utter.voice = fem;
+        utter.onstart = () => { talkTimer = 12.0; };
+        utter.onend = () => { talkTimer = 0.0; };
+        window.speechSynthesis.speak(utter);
+      } catch (e) {}
+    }
+
+    window.addEventListener('pointermove', (e) => {
+      pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
     });
 
+    renderer.domElement.addEventListener('pointerdown', (e) => {
+      pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+      pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+      raycaster.setFromCamera(pointer, camera);
+      if (currentVrm) {
+        const hits = raycaster.intersectObject(currentVrm.scene, true);
+        if (hits.length > 0) {
+          touchReaction = true;
+          actionDuration = 4.5;
+          activeActionsList = ["blush", "giggle"];
+          badge.textContent = "💖 Reacting";
+          badge.style.display = "block";
+          lastSpokenText = "";
+          speakNow("Hey, Master katanaking! You surprised me!");
+          setTimeout(() => { touchReaction = false; }, 4500);
+          return;
+        }
+      }
+      if (lastSpokenText) {
+        const repeat = lastSpokenText;
+        lastSpokenText = "";
+        speakNow(repeat);
+      }
+    });
+
+    window.applyLilyPayload = (data) => {
+      if (!data) return;
+
+      if (data.actions) {
+        activeActionsList = data.actions;
+        actionDuration = 7.5;
+        const badgeMap = {
+          blush: "😳 Blushing",
+          look_away: "🙈 Looking Away",
+          surprised: "😲 Gasping!",
+          giggle: "🤭 Giggling",
+          wave: "👋 Waving",
+          angry: "💢 Pouting",
+          sad: "😢 Crying",
+          happy: "😊 Happy"
+        };
+        badge.textContent = activeActionsList.map(a => badgeMap[a] || a).join(" + ");
+        badge.style.display = "block";
+      }
+
+      if (data.speech) {
+        talkTimer = Math.min(8.5, Math.max(3.0, data.speech.length * 0.055));
+        speakNow(data.speech);
+      }
+
+      if (data.camera) {
+        if (data.camera.includes("Close-Up")) {
+          camPosTarget.set(0.0, 1.37, 0.92);
+          ctrlTarget.set(0.0, 1.34, 0.0);
+        } else if (data.camera.includes("Full-Body")) {
+          camPosTarget.set(0.0, 0.95, 2.65);
+          ctrlTarget.set(0.0, 0.88, 0.0);
+        } else {
+          camPosTarget.set(0.0, 1.33, 1.55);
+          ctrlTarget.set(0.0, 1.25, 0.0);
+        }
+      }
+
+      if (data.particles) {
+        if (data.particles === "Off 🚫") {
+          particleSystem.visible = false;
+        } else {
+          particleSystem.visible = true;
+          if (data.particles !== currentParticleMode) {
+            currentParticleMode = data.particles;
+            pMat.map = makeParticleTexture(data.particles);
+            pMat.needsUpdate = true;
+          }
+        }
+      }
+
+      if (data.accessory && accObjects.neko) {
+        accObjects.neko.visible = data.accessory.includes("Neko");
+        accObjects.halo.visible = data.accessory.includes("Halo");
+        accObjects.glasses.visible = data.accessory.includes("Glasses");
+      }
+
+      if (data.outfit && currentVrm) {
+        applyOutfitTint(currentVrm, data.outfit);
+      }
+    };
+
+    try {
+      const bc = new BroadcastChannel('lily_channel');
+      bc.onmessage = (ev) => window.applyLilyPayload(ev.data);
+    } catch (e) {}
+
+    window.addEventListener("message", (ev) => {
+      if (ev.data && ev.data.type === "LILY_STATE") window.applyLilyPayload(ev.data);
+    });
+
+    const loader = new GLTFLoader();
+    loader.register((parser) => new VRMLoaderPlugin(parser));
     const clock = new THREE.Clock();
+
+    loader.load(
+      blobUrl,
+      (gltf) => {
+        const vrm = gltf.userData.vrm;
+        VRMUtils.removeUnnecessaryVertices(gltf.scene);
+        VRMUtils.rotateVRM0(vrm);
+        vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
+
+        const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
+        if (headNode) {
+          blushGroup = createAnimeBlush(headNode);
+          accObjects = createAccessories(headNode);
+        }
+
+        scene.add(vrm.scene);
+
+        const h = vrm.humanoid;
+        const lArm = h?.getNormalizedBoneNode('leftUpperArm');
+        const rArm = h?.getNormalizedBoneNode('rightUpperArm');
+        if (lArm) lArm.rotation.z = 1.18;
+        if (rArm) rArm.rotation.z = -1.18;
+
+        vrm.update(0.016);
+        vrm.springBoneManager?.reset();
+        clock.start();
+
+        currentVrm = vrm;
+        status.style.display = 'none';
+
+        try {
+          const saved = localStorage.getItem('lily_latest_state');
+          if (saved) window.applyLilyPayload(JSON.parse(saved));
+        } catch (e) {}
+      },
+      undefined,
+      (err) => {
+        status.textContent = "⚠️ Error loading VRM";
+        console.error(err);
+      }
+    );
+
     function animate() {
       requestAnimationFrame(animate);
-      const delta = clock.getDelta();
-      if (currentVrm) {
+      const delta = Math.min(clock.getDelta(), 0.05);
+      const t = clock.getElapsedTime();
+
+      camera.position.lerp(camPosTarget, 0.08);
+      controls.target.lerp(ctrlTarget, 0.08);
+
+      if (particleSystem.visible) {
+        const posArr = particleSystem.geometry.attributes.position.array;
+        const isRising = currentParticleMode.includes("Hearts");
+        for (let i = 0; i < pCount; i++) {
+          posArr[i * 3] += Math.sin(t * 1.5 + i) * 0.0015;
+          if (isRising) {
+            posArr[i * 3 + 1] += delta * 0.28;
+            if (posArr[i * 3 + 1] > 2.1) posArr[i * 3 + 1] = 0.2;
+          } else {
+            posArr[i * 3 + 1] -= delta * 0.22;
+            if (posArr[i * 3 + 1] < 0.1) posArr[i * 3 + 1] = 2.1;
+          }
+        }
+        particleSystem.geometry.attributes.position.needsUpdate = true;
+      }
+
+      if (currentVrm && currentVrm.humanoid) {
+        const h = currentVrm.humanoid;
+        const exp = currentVrm.expressionManager;
+
+        const spine = h.getNormalizedBoneNode('spine');
+        const chest = h.getNormalizedBoneNode('chest');
+        const neck = h.getNormalizedBoneNode('neck');
+        const head = h.getNormalizedBoneNode('head');
+        const leftUpperArm = h.getNormalizedBoneNode('leftUpperArm');
+        const rightUpperArm = h.getNormalizedBoneNode('rightUpperArm');
+        const leftLowerArm = h.getNormalizedBoneNode('leftLowerArm');
+        const rightLowerArm = h.getNormalizedBoneNode('rightLowerArm');
+        const leftHand = h.getNormalizedBoneNode('leftHand');
+        const rightHand = h.getNormalizedBoneNode('rightHand');
+
+        if (actionDuration > 0) actionDuration -= delta;
+        if (talkTimer > 0) talkTimer -= delta;
+
+        const isActing = actionDuration > 0;
+        const has = (act) => (touchReaction && (act === "blush" || act === "giggle")) || (isActing && activeActionsList.includes(act));
+        const inGaspPhase = has("surprised") && (t < 3.0 || (activeActionsList.length === 1));
+
+        let spineX = Math.sin(t * 1.6) * 0.016;
+        let spineY = 0.0;
+        let spineZ = Math.cos(t * 0.9) * 0.01;
+        let headX = Math.sin(t * 1.4) * 0.02 + (-pointer.y * 0.18);
+        let headY = Math.sin(t * 0.6) * 0.03 + (pointer.x * 0.28);
+        let headZ = Math.sin(t * 1.1) * 0.025;
+
+        let lUp = [0.05, 0.0, 1.18];
+        let rUp = [0.05, 0.0, -1.18];
+        let lLow = [0.0, 0.0, 0.0];
+        let rLow = [0.0, 0.0, 0.0];
+        let lHnd = [0.0, 0.0, 0.0];
+        let rHnd = [0.0, 0.0, 0.0];
+
+        if (touchReaction) {
+          headX = 0.16;
+          headZ = 0.10;
+          spineY = Math.sin(t * 3.0) * 0.07;
+          rUp = [0.45, -0.3, -0.85];
+          rLow = [0.2, 1.2, 1.05];
+        } else if (inGaspPhase) {
+          const gaspPulse = Math.sin(t * 12.0) * 0.02;
+          spineX = -0.14 + gaspPulse;
+          headX = -0.14;
+          headZ = 0.0;
+          lUp = [0.55, 0.35, 0.72];
+          rUp = [0.55, -0.35, -0.72];
+          lLow = [0.25, -1.35, -1.15];
+          rLow = [0.25, 1.35, 1.15];
+        } else {
+          if (has("wave")) {
+            const swing = Math.sin(t * 9.5);
+            rUp = [0.20, -0.20, -0.48];
+            rLow = [0.15, 1.55, 1.15 + swing * 0.22];
+            rHnd = [swing * 0.35, 0.30, 0.0];
+            headZ = 0.12;
+          }
+          if (has("blush")) {
+            spineY = Math.sin(t * 3.2) * 0.14;
+            headX = 0.22;
+            headZ = 0.16 + Math.sin(t * 3.5) * 0.06;
+            lUp = [0.50, 0.35, 0.82];
+            rUp = [0.50, -0.35, -0.82];
+            lLow = [0.25, -1.25, -1.12];
+            rLow = [0.25, 1.25, 1.12];
+          }
+          if (has("look_away")) {
+            headY = 0.62;
+            headX = 0.25;
+            spineY = -0.18;
+          }
+          if (has("giggle") || has("happy")) {
+            headZ = Math.sin(t * 6.5) * 0.055;
+            headX = Math.sin(t * 10.0) * 0.02;
+            spineY = Math.sin(t * 4.5) * 0.045;
+          }
+          if (has("sad")) {
+            headX = 0.32;
+            spineX = 0.14;
+          }
+          if (has("angry")) {
+            headX = 0.12;
+            headY = -0.25;
+            lUp = [0.2, 0.0, 0.70];
+            rUp = [0.2, 0.0, -0.70];
+            lLow = [0.0, -0.85, -0.75];
+            rLow = [0.0, 0.85, 0.75];
+          }
+        }
+
+        if (spine) spine.rotation.set(spineX, spineY, spineZ);
+        if (chest) chest.rotation.set(0.0, spineY * 0.5, 0.0);
+        if (neck) neck.rotation.set(headX * 0.35, headY * 0.35, 0.0);
+        if (head) head.rotation.set(headX, headY, headZ);
+
+        if (leftUpperArm) leftUpperArm.rotation.set(...lUp);
+        if (rightUpperArm) rightUpperArm.rotation.set(...rUp);
+        if (leftLowerArm) leftLowerArm.rotation.set(...lLow);
+        if (rightLowerArm) rightLowerArm.rotation.set(...rLow);
+        if (leftHand) leftHand.rotation.set(...lHnd);
+        if (rightHand) rightHand.rotation.set(...rHnd);
+
+        if (blushGroup) {
+          const showBlush = touchReaction || has("blush") || has("giggle") || has("look_away");
+          blushGroup.userData.mat.opacity = showBlush ? (0.85 + Math.sin(t * 4.0) * 0.15) : 0.0;
+        }
+
+        if (exp) {
+          const isHappy = touchReaction || (!inGaspPhase && (has("happy") || has("giggle") || has("wave") || has("blush")));
+          setExp(exp, ['happy', 'joy', 'fun'], isHappy ? 1.0 : 0.0);
+          setExp(exp, ['surprised'], inGaspPhase ? 1.0 : 0.0);
+          setExp(exp, ['angry'], has("angry") ? 1.0 : 0.0);
+          setExp(exp, ['sad', 'sorrow'], has("sad") ? 1.0 : 0.0);
+
+          const disableBlink = isHappy || inGaspPhase;
+          const rawBlink = Math.max(0, Math.sin(t * 1.5) - 0.96) * 25;
+          setExp(exp, ['blink'], disableBlink ? 0.0 : Math.min(1.0, rawBlink));
+
+          if (inGaspPhase) {
+            setExp(exp, ['oh', 'o'], 0.95);
+            setExp(exp, ['aa', 'a'], 0.45);
+          } else if (talkTimer > 0) {
+            setExp(exp, ['aa', 'a'], Math.abs(Math.sin(t * 13.5)) * 0.8);
+            setExp(exp, ['oh', 'o'], Math.abs(Math.cos(t * 9.0)) * 0.35);
+          } else {
+            setExp(exp, ['aa', 'a'], 0.0);
+            setExp(exp, ['oh', 'o'], 0.0);
+          }
+        }
+
         currentVrm.update(delta);
       }
+
       controls.update();
       renderer.render(scene, camera);
     }
