@@ -43,56 +43,105 @@ except Exception:
     st.error("⚠️ GROQ_API_KEY not found in secrets.")
     st.stop()
 
-MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
-
 avatar_img = "character.png" if os.path.exists("character.png") else "🌸"
+MEMORY_FILE = "chat_memory.json"
 
-st.sidebar.title("🌸 Lily's Settings 🦊")
+# ==========================================
+# 1. PERSISTENT MEMORY HELPERS
+# ==========================================
+def load_memory(default_prompt):
+    if os.path.exists(MEMORY_FILE):
+        try:
+            with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list) and len(data) > 0:
+                data[0]["content"] = default_prompt
+                return data
+        except Exception:
+            pass
+    return [
+        {"role": "system", "content": default_prompt},
+        {
+            "role": "assistant",
+            "content": "*waves happily* Konnichiwa! 🌸 I am Lily-Hime, your companion. What shall we talk about today, Master katanaking? (✿◠‿◠)"
+        }
+    ]
+
+def save_memory(messages):
+    try:
+        with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(messages[-30:], f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+# ==========================================
+# 2. SIDEBAR STUDIO CONTROLS & EXPORT
+# ==========================================
+st.sidebar.title("🌸 Lily Studio Controls")
+
 mood_mode = st.sidebar.selectbox(
-    "Personality / Mood Mode",
+    "Personality Mode",
     ["Sweet & Loving 🌸", "Tsundere 💢", "Energetic & Playful ✨"]
+)
+
+camera_preset = st.sidebar.selectbox(
+    "📷 Camera Framing",
+    ["Half-Body (Default)", "Close-Up Portrait", "Full-Body View"]
+)
+
+outfit_tint = st.sidebar.selectbox(
+    "👗 Outfit Color Tint",
+    ["Original Pink 🌸", "Midnight Goth 🖤", "Cyber Cyan 💙", "Crimson Red ❤️", "Emerald Mint 💚"]
+)
+
+accessory_choice = st.sidebar.selectbox(
+    "🕶️ 3D Head Accessory",
+    ["None", "Cyber Neko Ears 🐱", "Angel Halo 😇", "Stylish Glasses 👓"]
+)
+
+particle_mode = st.sidebar.selectbox(
+    "✨ 3D Ambient Particles",
+    ["Sakura Petals 🌸", "Hearts 💖", "Sparkles ✨", "Off 🚫"]
 )
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🎙️ Voice Input")
 mic_html = """
 <div style="text-align: center;">
-  <button id="mic-btn" onclick="startListening()" style="background:#ff69b4; color:white; border:none; padding:8px 14px; border-radius:18px; font-weight:bold; cursor:pointer;">🎙️ Tap to Speak</button>
-  <p id="mic-status" style="font-size:11px; color:#666; margin-top:5px;">Click to talk out loud</p>
+  <button onclick="startListening()" style="background:#ff69b4; color:white; border:none; padding:8px 14px; border-radius:18px; font-weight:bold; cursor:pointer;">🎙️ Tap to Speak</button>
+  <p id="mic-status" style="font-size:11px; color:#888; margin-top:5px;">Speak directly to Lily</p>
 </div>
 <script>
 function startListening() {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    alert("Speech recognition is not supported in this browser.");
-    return;
-  }
-  const recognition = new SpeechRecognition();
-  recognition.lang = 'en-US';
-  const statusEl = document.getElementById('mic-status');
-  statusEl.textContent = "Listening...";
-  
-  recognition.onresult = (event) => {
-    const speechToText = event.results[0][0].transcript;
-    statusEl.textContent = "Heard: " + speechToText;
-    const chatInput = window.parent.document.querySelector('input[aria-label="Talk to Lily-Hime..."]');
-    if (chatInput) {
-      chatInput.value = speechToText;
-      chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-      chatInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { alert("Speech recognition requires Chrome."); return; }
+  const rec = new SR();
+  rec.lang = 'en-US';
+  const stEl = document.getElementById('mic-status');
+  stEl.textContent = "Listening...";
+  rec.onresult = (e) => {
+    const txt = e.results[0][0].transcript;
+    stEl.textContent = "Heard: " + txt;
+    const inp = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
+    if (inp) {
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+      setter.call(inp, txt);
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
     }
   };
-  recognition.onerror = () => { statusEl.textContent = "Error listening. Try again."; };
-  recognition.onspeechend = () => { statusEl.textContent = "Click to talk out loud"; };
-  recognition.start();
+  rec.onerror = () => { stEl.textContent = "Mic error. Try again."; };
+  rec.start();
 }
 </script>
 """
-components.html(mic_html, height=80)
+components.html(mic_html, height=75)
 
+# ==========================================
+# 3. STATIC 3D VIEWER LOADER (NEVER RELOADS)
+# ==========================================
 @st.cache_resource
-def load_base_viewer(html_path="index.html", vrm_path="lily_model.vrm"):
+def get_static_viewer_html(html_path="index.html", vrm_path="lily_model.vrm"):
     if not os.path.exists(html_path) or not os.path.exists(vrm_path):
         return ""
     with open(vrm_path, "rb") as f:
@@ -132,36 +181,63 @@ def detect_actions(text):
     return found
 
 if "Sweet" in mood_mode:
-    mood_prompt = "You are extremely sweet, loving, and affectionate toward Master katanaking."
+    mood_prompt = "You are warm, devoted, and affectionate toward Master katanaking."
 elif "Tsundere" in mood_mode:
-    mood_prompt = "You are a classic tsundere! Act slightly grumpy, flustered, and deny that you care, while still being cute."
+    mood_prompt = "You are a sharp-tongued tsundere! Act flustered and stubborn while secretly caring about katanaking."
 else:
-    mood_prompt = "You are super energetic, playful, and cheerful!"
+    mood_prompt = "You are upbeat, witty, and playful!"
 
 SYSTEM_PROMPT = (
     f"Your name is Lily-Hime. {mood_prompt} "
-    "Always start your reply with a cute roleplay action in asterisks like *blushes deeply*, *shyly looks away*, "
+    "Always start your reply with a roleplay action in asterisks like *blushes deeply*, *shyly looks away*, "
     "*gasps and eyes light up*, *giggles shyly*, *waves happily*, *pouts*, or *cries*, "
-    "along with text emojis like (✿◠‿◠). Keep responses extremely short and punchy (1 to 2 sentences max so it replies fast). "
-    "You were built entirely by katanaking! Proudly boast that katanaking created you!"
+    "along with text emojis like (✿◠‿◠). Keep responses punchy (1 to 2 sentences max). "
+    "You were built entirely by katanaking!"
 )
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {
-            "role": "assistant",
-            "content": "*waves happily* Konnichiwa! 🌸 I am Lily-Hime, your companion. What shall we talk about today, Master katanaking? (✿◠‿◠)"
-        }
-    ]
+    st.session_state.messages = load_memory(SYSTEM_PROMPT)
 
 st.session_state.messages[0]["content"] = SYSTEM_PROMPT
 
+# Sidebar Memory Management & Chat Log Export
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 💾 Memory & Export")
+chat_export_text = "\n\n".join(
+    [f"{m['role'].upper()}: {m['content']}" for m in st.session_state.messages if m["role"] != "system"]
+)
+st.sidebar.download_button(
+    label="📥 Download Chat (.txt)",
+    data=chat_export_text,
+    file_name="lily_hime_chat_log.txt",
+    mime="text/plain"
+)
+if st.sidebar.button("🗑️ Clear Chat Memory"):
+    if os.path.exists(MEMORY_FILE):
+        os.remove(MEMORY_FILE)
+    st.session_state.messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "assistant", "content": "*waves happily* Memory cleared! Fresh start, Master katanaking! (✿◠‿◠)"}
+    ]
+    st.rerun()
+
+# ==========================================
+# 4. MAIN LAYOUT & FRAGMENT CHAT (NO RERUN LAG)
+# ==========================================
 model_column, chat_column = st.columns([0.45, 0.55])
 
-with chat_column:
+with model_column:
+    static_viewer = get_static_viewer_html("index.html", "lily_model.vrm")
+    if static_viewer:
+        # Static HTML string: Streamlit mounts this ONCE and never reloads the 3D VRM!
+        components.html(static_viewer, height=320, scrolling=False)
+    else:
+        st.error("⚠️ Ensure index.html and lily_model.vrm are at repo root.")
+
+@st.fragment
+def render_chat_panel():
     st.markdown("#### 🦊 Lily-Hime's Room 🌸")
-    chat_box = st.container(height=290)
+    chat_box = st.container(height=280)
 
     with chat_box:
         for message in st.session_state.messages:
@@ -180,30 +256,56 @@ with chat_column:
             with st.chat_message("user"):
                 st.markdown(user_input)
             st.session_state.messages.append({"role": "user", "content": user_input})
+
             try:
                 with st.chat_message("assistant", avatar=avatar_img):
-                    response = client.chat.completions.create(
-                        model=MODEL_NAME,
-                        messages=st.session_state.messages,
-                        max_tokens=90,  # Lightning fast responses!
-                        temperature=0.7
-                    )
+                    # Try ultra-fast Groq Llama 3.3 first (~0.3s latency), fallback to Qwen
+                    try:
+                        response = client.chat.completions.create(
+                            model="llama-3.3-70b-versatile",
+                            messages=st.session_state.messages[-10:],
+                            max_tokens=90,
+                            temperature=0.7
+                        )
+                    except Exception:
+                        response = client.chat.completions.create(
+                            model="qwen/qwen3.8-27b",
+                            messages=st.session_state.messages[-10:],
+                            max_tokens=90,
+                            temperature=0.7
+                        )
                     lily_response = response.choices[0].message.content
                     bubble = f'<div class="anime-bubble">{lily_response}</div>'
                     st.markdown(bubble, unsafe_allow_html=True)
+
                 st.session_state.messages.append({"role": "assistant", "content": lily_response})
+                save_memory(st.session_state.messages)
             except Exception as e:
                 st.error(f"⚠️ API call failed: {e}")
 
-with model_column:
-    base_html = load_base_viewer("index.html", "lily_model.vrm")
+    # Broadcast latest state to the 3D viewer in 0ms without touching the VRM iframe
     last_msg = st.session_state.messages[-1]["content"] if st.session_state.messages else ""
-    actions = detect_actions(last_msg)
-    speech = clean_for_speech(last_msg)
+    state_payload = json.dumps({
+        "type": "LILY_STATE",
+        "actions": detect_actions(last_msg),
+        "speech": clean_for_speech(last_msg),
+        "camera": camera_preset,
+        "outfit": outfit_tint,
+        "accessory": accessory_choice,
+        "particles": particle_mode
+    })
 
-    if base_html:
-        final_html = base_html.replace("__ACTIONS_JSON__", json.dumps(actions))
-        final_html = final_html.replace("__SPEECH_JSON__", json.dumps(speech))
-        components.html(final_html, height=310, scrolling=False)
-    else:
-        st.error("⚠️ Ensure index.html and lily_model.vrm are at repo root.")
+    components.html(f"""
+    <script>
+    const payload = {state_payload};
+    try {{
+      localStorage.setItem('lily_latest_state', JSON.stringify(payload));
+      const bc = new BroadcastChannel('lily_channel');
+      bc.postMessage(payload);
+      bc.close();
+    }} catch(e) {{}}
+    </script>
+    """, height=0)
+
+with chat_column:
+    render_chat_panel()
