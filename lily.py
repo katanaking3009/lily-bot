@@ -48,6 +48,53 @@ client = Groq(api_key=api_key)
 
 avatar_img = "character.png" if os.path.exists("character.png") else "🌸"
 
+# Sidebar Controls: Personality & Mood Mode Toggle
+st.sidebar.title("🌸 Lily's Settings 🦊")
+mood_mode = st.sidebar.selectbox(
+    "Personality / Mood Mode",
+    ["Sweet & Loving 🌸", "Tsundere 💢", "Energetic & Playful ✨"]
+)
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🎙️ Voice Input")
+# Microphone Speech-to-Text Helper widget via browser JS snippet injected in sidebar
+mic_html = """
+<div style="text-align: center;">
+  <button id="mic-btn" onclick="startListening()" style="background:#ff69b4; color:white; border:none; padding:8px 14px; border-radius:18px; font-weight:bold; cursor:pointer;">🎙️ Tap to Speak</button>
+  <p id="mic-status" style="font-size:11px; color:#666; margin-top:5px;">Click to talk out loud</p>
+</div>
+<script>
+function startListening() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert("Speech recognition is not supported in this browser.");
+    return;
+  }
+  const recognition = new SpeechRecognition();
+  recognition.lang = 'en-US';
+  const statusEl = document.getElementById('mic-status');
+  statusEl.textContent = "Listening...";
+  
+  recognition.onresult = (event) => {
+    const speechToText = event.results[0][0].transcript;
+    statusEl.textContent = "Heard: " + speechToText;
+    // Find Streamlit chat input and fill it
+    const chatInput = window.parent.document.querySelector('input[aria-label="Talk to Lily-Hime..."]');
+    if (chatInput) {
+      chatInput.value = speechToText;
+      chatInput.dispatchEvent(new Event('input', { bubbles: true }));
+      // Press enter
+      chatInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+    }
+  };
+  recognition.onerror = () => { statusEl.textContent = "Error listening. Try again."; };
+  recognition.onspeechend = () => { statusEl.textContent = "Click to talk out loud"; };
+  recognition.start();
+}
+</script>
+"""
+components.html(mic_html, height=80)
+
 @st.cache_resource
 def load_base_viewer(html_path="index.html", vrm_path="lily_model.vrm"):
     if not os.path.exists(html_path) or not os.path.exists(vrm_path):
@@ -65,7 +112,6 @@ def clean_for_speech(text):
     return " ".join(text.split())
 
 def detect_actions(text):
-    # Extract all *actions* and (actions), plus scan the full text
     brackets = " ".join(re.findall(r"(\*.*?\*|\(.*?\))", text)).lower()
     full = (brackets + " " + text.lower()).strip()
 
@@ -89,9 +135,17 @@ def detect_actions(text):
         found.append("happy")
     return found
 
+# Dynamic System Prompt based on Mood Mode
+if "Sweet" in mood_mode:
+    mood_prompt = "You are extremely sweet, loving, and affectionate toward Master katanaking."
+elif "Tsundere" in mood_mode:
+    mood_prompt = "You are a classic tsundere! Act slightly grumpy, flustered, and deny that you care, while still being cute."
+else:
+    mood_prompt = "You are super energetic, playful, and cheerful!"
+
 SYSTEM_PROMPT = (
-    "Your name is Lily-Hime. You are a cheerful, sweet, expressive anime girl character. "
-    "Always include cute roleplay actions in asterisks like *blushes deeply*, *shyly looks away*, "
+    f"Your name is Lily-Hime. {mood_prompt} "
+    "Always start your reply with a cute roleplay action in asterisks like *blushes deeply*, *shyly looks away*, "
     "*gasps and eyes light up*, *giggles shyly*, *waves happily*, *pouts*, or *cries*, "
     "along with text emojis like (✿◠‿◠). Keep responses concise (2 to 3 sentences). "
     "You were built entirely by katanaking! Proudly boast that katanaking created you!"
@@ -105,6 +159,9 @@ if "messages" not in st.session_state:
             "content": "*waves happily* Konnichiwa! 🌸 I am Lily-Hime, your companion. What shall we talk about today, Master katanaking? (✿◠‿◠)"
         }
     ]
+
+# Keep system prompt updated if mood changes
+st.session_state.messages[0]["content"] = SYSTEM_PROMPT
 
 model_column, chat_column = st.columns([0.45, 0.55])
 
@@ -134,7 +191,7 @@ with chat_column:
                     response = client.chat.completions.create(
                         model=MODEL_NAME,
                         messages=st.session_state.messages,
-                        max_tokens=220,
+                        max_tokens=150,
                         temperature=0.7
                     )
                     lily_response = response.choices[0].message.content
