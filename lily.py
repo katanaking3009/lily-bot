@@ -131,7 +131,7 @@ function startListening() {
 """
 components.html(mic_html, height=75)
 
-@st.cache_resource
+# Removed @st.cache_resource so it reads the freshly uploaded VRM file every single time without caching bugs
 def get_static_viewer_html(html_path="index.html", vrm_path="lily_model.vrm"):
     if not os.path.exists(html_path) or not os.path.exists(vrm_path):
         return ""
