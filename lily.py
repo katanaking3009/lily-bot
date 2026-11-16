@@ -47,14 +47,16 @@ client = Groq(api_key=api_key)
 avatar_img = "character.png" if os.path.exists("character.png") else "🌸"
 MEMORY_FILE = "chat_memory.json"
 
-# Git LFS Pointer Detector
-if os.path.exists("lily_model.vrm"):
-    with open("lily_model.vrm", "rb") as f:
+# Support both file names so it loads whichever one is present
+VRM_FILENAME = "lily_avatar.vrm" if os.path.exists("lily_avatar.vrm") else "lily_model.vrm"
+
+if os.path.exists(VRM_FILENAME):
+    with open(VRM_FILENAME, "rb") as f:
         header = f.read(30)
     if header.startswith(b"version https://git-lfs"):
         st.error(
-            "⚠️ **Git LFS Pointer Detected!** `lily_model.vrm` on GitHub is currently a tiny LFS text pointer, not your 16.5MB 3D model. "
-            "Please delete `lily_model.vrm` from your GitHub repo and re-upload the `.vrm` file directly via the GitHub web interface!"
+            f"⚠️ **Git LFS Pointer Detected!** `{VRM_FILENAME}` on GitHub is a tiny LFS text pointer, not your 16.5MB 3D model. "
+            "Please rename your file on your PC to `lily_avatar.vrm`, delete the old one from GitHub, and re-upload `lily_avatar.vrm` directly via the web browser!"
         )
         st.stop()
 
@@ -142,7 +144,7 @@ function startListening() {
 """
 components.html(mic_html, height=75)
 
-def get_viewer_html(html_path="index.html", vrm_path="lily_model.vrm"):
+def get_viewer_html(html_path="index.html", vrm_path=VRM_FILENAME):
     if not os.path.exists(html_path) or not os.path.exists(vrm_path):
         return ""
     with open(vrm_path, "rb") as f:
@@ -224,11 +226,11 @@ if st.sidebar.button("🗑️ Clear Chat Memory"):
 model_column, chat_column = st.columns([0.45, 0.55])
 
 with model_column:
-    viewer_html = get_viewer_html("index.html", "lily_model.vrm")
+    viewer_html = get_viewer_html("index.html", VRM_FILENAME)
     if viewer_html:
         components.html(viewer_html, height=320, scrolling=False)
     else:
-        st.error("⚠️ Ensure index.html and lily_model.vrm are at repo root.")
+        st.error(f"⚠️ Ensure index.html and {VRM_FILENAME} are at repo root.")
 
 @st.fragment
 def render_chat_panel():
