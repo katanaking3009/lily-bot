@@ -102,6 +102,7 @@
     scene.add(new THREE.DirectionalLight(0xfff5f8, 1.35));
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
+    // Fresh Blob URL generation every time (fixes stale cache issues)
     const b64 = "__VRM_BASE64__";
     const bin = atob(b64);
     const bytes = new Uint8Array(bin.length);
