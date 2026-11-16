@@ -48,7 +48,6 @@ client = Groq(api_key=api_key)
 
 avatar_img = "character.png" if os.path.exists("character.png") else "🌸"
 
-# Sidebar Controls: Personality & Mood Mode Toggle
 st.sidebar.title("🌸 Lily's Settings 🦊")
 mood_mode = st.sidebar.selectbox(
     "Personality / Mood Mode",
@@ -57,7 +56,6 @@ mood_mode = st.sidebar.selectbox(
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🎙️ Voice Input")
-# Microphone Speech-to-Text Helper widget via browser JS snippet injected in sidebar
 mic_html = """
 <div style="text-align: center;">
   <button id="mic-btn" onclick="startListening()" style="background:#ff69b4; color:white; border:none; padding:8px 14px; border-radius:18px; font-weight:bold; cursor:pointer;">🎙️ Tap to Speak</button>
@@ -78,12 +76,10 @@ function startListening() {
   recognition.onresult = (event) => {
     const speechToText = event.results[0][0].transcript;
     statusEl.textContent = "Heard: " + speechToText;
-    // Find Streamlit chat input and fill it
     const chatInput = window.parent.document.querySelector('input[aria-label="Talk to Lily-Hime..."]');
     if (chatInput) {
       chatInput.value = speechToText;
       chatInput.dispatchEvent(new Event('input', { bubbles: true }));
-      // Press enter
       chatInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
     }
   };
@@ -135,7 +131,6 @@ def detect_actions(text):
         found.append("happy")
     return found
 
-# Dynamic System Prompt based on Mood Mode
 if "Sweet" in mood_mode:
     mood_prompt = "You are extremely sweet, loving, and affectionate toward Master katanaking."
 elif "Tsundere" in mood_mode:
@@ -147,7 +142,7 @@ SYSTEM_PROMPT = (
     f"Your name is Lily-Hime. {mood_prompt} "
     "Always start your reply with a cute roleplay action in asterisks like *blushes deeply*, *shyly looks away*, "
     "*gasps and eyes light up*, *giggles shyly*, *waves happily*, *pouts*, or *cries*, "
-    "along with text emojis like (✿◠‿◠). Keep responses concise (2 to 3 sentences). "
+    "along with text emojis like (✿◠‿◠). Keep responses extremely short and punchy (1 to 2 sentences max so it replies fast). "
     "You were built entirely by katanaking! Proudly boast that katanaking created you!"
 )
 
@@ -160,7 +155,6 @@ if "messages" not in st.session_state:
         }
     ]
 
-# Keep system prompt updated if mood changes
 st.session_state.messages[0]["content"] = SYSTEM_PROMPT
 
 model_column, chat_column = st.columns([0.45, 0.55])
@@ -191,7 +185,7 @@ with chat_column:
                     response = client.chat.completions.create(
                         model=MODEL_NAME,
                         messages=st.session_state.messages,
-                        max_tokens=150,
+                        max_tokens=90,  # Lightning fast responses!
                         temperature=0.7
                     )
                     lily_response = response.choices[0].message.content
