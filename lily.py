@@ -47,6 +47,17 @@ client = Groq(api_key=api_key)
 avatar_img = "character.png" if os.path.exists("character.png") else "🌸"
 MEMORY_FILE = "chat_memory.json"
 
+# Git LFS Pointer Detector
+if os.path.exists("lily_model.vrm"):
+    with open("lily_model.vrm", "rb") as f:
+        header = f.read(30)
+    if header.startswith(b"version https://git-lfs"):
+        st.error(
+            "⚠️ **Git LFS Pointer Detected!** `lily_model.vrm` on GitHub is currently a tiny LFS text pointer, not your 16.5MB 3D model. "
+            "Please delete `lily_model.vrm` from your GitHub repo and re-upload the `.vrm` file directly via the GitHub web interface!"
+        )
+        st.stop()
+
 def load_memory(default_prompt):
     if os.path.exists(MEMORY_FILE):
         try:
@@ -131,8 +142,7 @@ function startListening() {
 """
 components.html(mic_html, height=75)
 
-# Removed @st.cache_resource so it reads the freshly uploaded VRM file every single time without caching bugs
-def get_static_viewer_html(html_path="index.html", vrm_path="lily_model.vrm"):
+def get_viewer_html(html_path="index.html", vrm_path="lily_model.vrm"):
     if not os.path.exists(html_path) or not os.path.exists(vrm_path):
         return ""
     with open(vrm_path, "rb") as f:
@@ -214,9 +224,9 @@ if st.sidebar.button("🗑️ Clear Chat Memory"):
 model_column, chat_column = st.columns([0.45, 0.55])
 
 with model_column:
-    static_viewer = get_static_viewer_html("index.html", "lily_model.vrm")
-    if static_viewer:
-        components.html(static_viewer, height=320, scrolling=False)
+    viewer_html = get_viewer_html("index.html", "lily_model.vrm")
+    if viewer_html:
+        components.html(viewer_html, height=320, scrolling=False)
     else:
         st.error("⚠️ Ensure index.html and lily_model.vrm are at repo root.")
 
@@ -283,7 +293,6 @@ def render_chat_panel():
     <script>
     const payload = {state_payload};
     try {{
-      localStorage.setItem('lily_latest_state', JSON.stringify(payload));
       const bc = new BroadcastChannel('lily_channel');
       bc.postMessage(payload);
       bc.close();
