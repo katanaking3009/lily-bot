@@ -8,7 +8,7 @@
       overflow: hidden;
       background: var(--bg-gradient, radial-gradient(circle at 50% 35%, #fff0f6 0%, #ffd6e7 100%));
       font-family: sans-serif;
-      transition: background 1s ease;
+      transition: background 0.8s ease;
     }
     canvas { width: 100vw; height: 100vh; display: block; cursor: pointer; }
     #status {
@@ -75,18 +75,11 @@
     const status = document.getElementById('status');
     const badge = document.getElementById('emotion-badge');
 
-    const hour = new Date().getHours();
-    if (hour >= 18 || hour < 6) {
-      document.body.style.setProperty('--bg-gradient', 'radial-gradient(circle at 50% 35%, #1a102f 0%, #0d061a 100%)');
-    } else if (hour >= 16) {
-      document.body.style.setProperty('--bg-gradient', 'radial-gradient(circle at 50% 35%, #ffe3d0 0%, #ffb6c1 100%)');
-    }
-
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.95;
+    renderer.toneMappingExposure = 0.98;
     document.body.appendChild(renderer.domElement);
 
     const camera = new THREE.PerspectiveCamera(26.0, window.innerWidth / window.innerHeight, 0.1, 20.0);
@@ -100,9 +93,64 @@
     const camPosTarget = new THREE.Vector3(0.0, 1.33, 1.55);
     const ctrlTarget = new THREE.Vector3(0.0, 1.25, 0.0);
 
+    // ==========================================
+    // DYNAMIC 3D ROOM LIGHTING RIG
+    // ==========================================
     const scene = new THREE.Scene();
-    scene.add(new THREE.DirectionalLight(0xfff5f8, 1.35));
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const keyLight = new THREE.DirectionalLight(0xfff5f8, 1.35);
+    keyLight.position.set(1.2, 1.6, 1.5);
+    scene.add(keyLight);
+
+    const rimLight = new THREE.PointLight(0x00ffff, 0.0, 6.0);
+    rimLight.position.set(-1.2, 1.4, -0.8);
+    scene.add(rimLight);
+
+    const ambLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambLight);
+
+    function applyLightingTheme(theme) {
+      if (!theme || theme.includes("Auto")) {
+        const hour = new Date().getHours();
+        if (hour >= 18 || hour < 6) theme = "Moonlight 🌙";
+        else if (hour >= 16) theme = "Golden Sunset 🌅";
+        else theme = "Studio Softbox 💡";
+      }
+
+      if (theme.includes("Cyberpunk")) {
+        document.body.style.setProperty('--bg-gradient', 'radial-gradient(circle at 50% 35%, #240b36 0%, #0a0414 100%)');
+        keyLight.color.setHex(0xff2a85);
+        keyLight.intensity = 1.6;
+        rimLight.color.setHex(0x00f0ff);
+        rimLight.intensity = 2.4;
+        ambLight.color.setHex(0x2a1b4e);
+        ambLight.intensity = 0.55;
+      } else if (theme.includes("Sunset")) {
+        document.body.style.setProperty('--bg-gradient', 'radial-gradient(circle at 50% 35%, #ffd1b3 0%, #ff8da1 100%)');
+        keyLight.color.setHex(0xff9e5e);
+        keyLight.intensity = 1.55;
+        rimLight.color.setHex(0xffcc00);
+        rimLight.intensity = 0.8;
+        ambLight.color.setHex(0xffe4d6);
+        ambLight.intensity = 0.55;
+      } else if (theme.includes("Moonlight")) {
+        document.body.style.setProperty('--bg-gradient', 'radial-gradient(circle at 50% 35%, #162238 0%, #090d16 100%)');
+        keyLight.color.setHex(0x9bb8ff);
+        keyLight.intensity = 1.15;
+        rimLight.color.setHex(0x6688ff);
+        rimLight.intensity = 1.2;
+        ambLight.color.setHex(0x3a4b6e);
+        ambLight.intensity = 0.45;
+      } else {
+        // Studio Softbox Default
+        document.body.style.setProperty('--bg-gradient', 'radial-gradient(circle at 50% 35%, #fff0f6 0%, #ffd6e7 100%)');
+        keyLight.color.setHex(0xfff5f8);
+        keyLight.intensity = 1.35;
+        rimLight.intensity = 0.0;
+        ambLight.color.setHex(0xffffff);
+        ambLight.intensity = 0.65;
+      }
+    }
+    applyLightingTheme("Auto");
 
     const b64 = "__VRM_BASE64__";
     const bin = atob(b64);
@@ -114,10 +162,24 @@
     let blushGroup = null;
     let accObjects = {};
     let activeActionsList = ["wave"];
-    let talkTimer = 0;
     let actionDuration = 5.0;
     let lastSpokenText = "";
     let touchReaction = false;
+    let spinTimer = 0.0;
+
+    // ==========================================
+    // REAL-TIME SYLLABLE & VOWEL LIP-SYNC ENGINE
+    // ==========================================
+    let isSpeakingNow = false;
+    let talkFallbackTimer = 0.0;
+    let currentVowel = "aa";
+    let syllableEnergy = 0.0;
+    let voiceSettings = { profile: "Auto Anime", pitch: 1.4, rate: 1.05 };
+
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    }
 
     const pointer = new THREE.Vector2(0, 0);
     const raycaster = new THREE.Raycaster();
@@ -289,13 +351,55 @@
       try {
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(text);
-        utter.pitch = 1.45;
-        utter.rate = 1.05;
+        utter.pitch = voiceSettings.pitch || 1.4;
+        utter.rate = voiceSettings.rate || 1.05;
+
         const voices = window.speechSynthesis.getVoices();
-        const fem = voices.find(v => v.name.includes("Female") || v.name.includes("Zira") || v.name.includes("Samantha"));
-        if (fem) utter.voice = fem;
-        utter.onstart = () => { talkTimer = 12.0; };
-        utter.onend = () => { talkTimer = 0.0; };
+        let chosen = null;
+        const prof = voiceSettings.profile || "";
+
+        if (prof.includes("Zira")) {
+          chosen = voices.find(v => v.name.includes("Zira"));
+        } else if (prof.includes("Google")) {
+          chosen = voices.find(v => v.name.includes("Google") && (v.name.includes("US") || v.name.includes("Female") || v.name.includes("UK")));
+        } else if (prof.includes("Samantha")) {
+          chosen = voices.find(v => v.name.includes("Samantha") || v.name.includes("Victoria"));
+        } else if (prof.includes("Japanese")) {
+          chosen = voices.find(v => v.lang.includes("ja") || v.name.includes("Japanese") || v.name.includes("Haruka"));
+        }
+        if (!chosen) {
+          chosen = voices.find(v => v.name.includes("Female") || v.name.includes("Zira") || v.name.includes("Samantha") || v.name.includes("Google US English"));
+        }
+        if (chosen) utter.voice = chosen;
+
+        utter.onstart = () => {
+          isSpeakingNow = true;
+          syllableEnergy = 0.85;
+          talkFallbackTimer = Math.min(10.0, Math.max(2.5, text.length * 0.065));
+        };
+
+        // Real-time word/syllable boundary tracking for authentic vowel lip-sync!
+        utter.onboundary = (e) => {
+          isSpeakingNow = true;
+          syllableEnergy = 1.0;
+          const slice = text.slice(e.charIndex, e.charIndex + 5).toLowerCase();
+          if (slice.includes('o') || slice.includes('u') || slice.includes('w')) currentVowel = 'oh';
+          else if (slice.includes('e') || slice.includes('i') || slice.includes('y')) currentVowel = 'ee';
+          else currentVowel = 'aa';
+        };
+
+        utter.onend = () => {
+          isSpeakingNow = false;
+          talkFallbackTimer = 0.0;
+          syllableEnergy = 0.0;
+        };
+        utter.onerror = () => {
+          isSpeakingNow = false;
+          talkFallbackTimer = 0.0;
+        };
+
+        // Fallback timer for mobile browsers that don't fire onstart
+        talkFallbackTimer = Math.min(8.0, Math.max(2.2, text.length * 0.06));
         window.speechSynthesis.speak(utter);
       } catch (e) {}
     }
@@ -316,10 +420,10 @@
           touchReaction = true;
           actionDuration = 4.5;
           activeActionsList = ["blush", "giggle"];
-          badge.textContent = "💖 Reacting";
+          badge.textContent = "💖 Headpat Reaction!";
           badge.style.display = "block";
           lastSpokenText = "";
-          speakNow("Hey, Master katanaking! You surprised me!");
+          speakNow("Ehehe! Master katanaking, your headpats make me so happy!");
           setTimeout(() => { touchReaction = false; }, 4500);
           return;
         }
@@ -334,9 +438,20 @@
     window.applyLilyPayload = (data) => {
       if (!data) return;
 
+      if (data.voice) {
+        voiceSettings = data.voice;
+      }
+
+      if (data.lighting) {
+        applyLightingTheme(data.lighting);
+      }
+
       if (data.actions) {
         activeActionsList = data.actions;
         actionDuration = 7.5;
+        if (activeActionsList.includes("spin")) {
+          spinTimer = 1.6;
+        }
         const badgeMap = {
           blush: "😳 Blushing",
           look_away: "🙈 Looking Away",
@@ -345,14 +460,15 @@
           wave: "👋 Waving",
           angry: "💢 Pouting",
           sad: "😢 Crying",
-          happy: "😊 Happy"
+          happy: "😊 Happy",
+          spin: "💫 360° Twirl!",
+          pose: "✌️ Idol Pose!"
         };
         badge.textContent = activeActionsList.map(a => badgeMap[a] || a).join(" + ");
         badge.style.display = "block";
       }
 
       if (data.speech) {
-        talkTimer = Math.min(8.5, Math.max(3.0, data.speech.length * 0.055));
         speakNow(data.speech);
       }
 
@@ -470,6 +586,15 @@
         const h = currentVrm.humanoid;
         const exp = currentVrm.expressionManager;
 
+        // 360 Spin Trigger Animation
+        if (spinTimer > 0) {
+          spinTimer -= delta;
+          const progress = Math.max(0, 1.0 - (spinTimer / 1.6));
+          currentVrm.scene.rotation.y = progress * Math.PI * 2;
+        } else {
+          currentVrm.scene.rotation.y = 0;
+        }
+
         const spine = h.getNormalizedBoneNode('spine');
         const chest = h.getNormalizedBoneNode('chest');
         const neck = h.getNormalizedBoneNode('neck');
@@ -482,7 +607,8 @@
         const rightHand = h.getNormalizedBoneNode('rightHand');
 
         if (actionDuration > 0) actionDuration -= delta;
-        if (talkTimer > 0) talkTimer -= delta;
+        if (talkFallbackTimer > 0) talkFallbackTimer -= delta;
+        syllableEnergy = Math.max(0.25, syllableEnergy - delta * 2.2);
 
         const isActing = actionDuration > 0;
         const has = (act) => (touchReaction && (act === "blush" || act === "giggle")) || (isActing && activeActionsList.includes(act));
@@ -518,6 +644,14 @@
           lLow = [0.25, -1.35, -1.15];
           rLow = [0.25, 1.35, 1.15];
         } else {
+          if (has("pose")) {
+            // Cute Idol Peace Pose
+            headZ = -0.16;
+            spineZ = 0.06;
+            rUp = [0.45, -0.25, -0.55];
+            rLow = [0.2, 1.45, 1.15];
+            lUp = [0.15, 0.1, 0.95];
+          }
           if (has("wave")) {
             const swing = Math.sin(t * 9.5);
             rUp = [0.20, -0.20, -0.48];
@@ -575,8 +709,9 @@
           blushGroup.userData.mat.opacity = showBlush ? (0.85 + Math.sin(t * 4.0) * 0.15) : 0.0;
         }
 
+        // Dynamic Vowel Phoneme Lip-Sync & Expressions
         if (exp) {
-          const isHappy = touchReaction || (!inGaspPhase && (has("happy") || has("giggle") || has("wave") || has("blush")));
+          const isHappy = touchReaction || (!inGaspPhase && (has("happy") || has("giggle") || has("wave") || has("blush") || has("pose") || has("spin")));
           setExp(exp, ['happy', 'joy', 'fun'], isHappy ? 1.0 : 0.0);
           setExp(exp, ['surprised'], inGaspPhase ? 1.0 : 0.0);
           setExp(exp, ['angry'], has("angry") ? 1.0 : 0.0);
@@ -586,15 +721,20 @@
           const rawBlink = Math.max(0, Math.sin(t * 1.5) - 0.96) * 25;
           setExp(exp, ['blink'], disableBlink ? 0.0 : Math.min(1.0, rawBlink));
 
+          const mouthActive = isSpeakingNow || talkFallbackTimer > 0;
           if (inGaspPhase) {
             setExp(exp, ['oh', 'o'], 0.95);
             setExp(exp, ['aa', 'a'], 0.45);
-          } else if (talkTimer > 0) {
-            setExp(exp, ['aa', 'a'], Math.abs(Math.sin(t * 13.5)) * 0.8);
-            setExp(exp, ['oh', 'o'], Math.abs(Math.cos(t * 9.0)) * 0.35);
+            setExp(exp, ['ee', 'e'], 0.0);
+          } else if (mouthActive) {
+            const pulse = Math.abs(Math.sin(t * 15.0)) * syllableEnergy;
+            setExp(exp, ['aa', 'a'], currentVowel === 'aa' ? pulse * 0.9 : pulse * 0.25);
+            setExp(exp, ['oh', 'o'], currentVowel === 'oh' ? pulse * 0.85 : pulse * 0.15);
+            setExp(exp, ['ee', 'e', 'ih', 'i'], currentVowel === 'ee' ? pulse * 0.75 : 0.0);
           } else {
             setExp(exp, ['aa', 'a'], 0.0);
             setExp(exp, ['oh', 'o'], 0.0);
+            setExp(exp, ['ee', 'e', 'ih', 'i'], 0.0);
           }
         }
 
