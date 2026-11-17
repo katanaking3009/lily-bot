@@ -47,7 +47,6 @@ client = Groq(api_key=api_key)
 avatar_img = "character.png" if os.path.exists("character.png") else "🌸"
 MEMORY_FILE = "chat_memory.json"
 
-# Support both file names so it loads whichever one is present
 VRM_FILENAME = "lily_avatar.vrm" if os.path.exists("lily_avatar.vrm") else "lily_model.vrm"
 
 if os.path.exists(VRM_FILENAME):
@@ -56,7 +55,7 @@ if os.path.exists(VRM_FILENAME):
     if header.startswith(b"version https://git-lfs"):
         st.error(
             f"⚠️ **Git LFS Pointer Detected!** `{VRM_FILENAME}` on GitHub is a tiny LFS text pointer, not your 16.5MB 3D model. "
-            "Please rename your file on your PC to `lily_avatar.vrm`, delete the old one from GitHub, and re-upload `lily_avatar.vrm` directly via the web browser!"
+            "Please upload the raw binary VRM file via the GitHub web browser!"
         )
         st.stop()
 
@@ -85,11 +84,19 @@ def save_memory(messages):
     except Exception:
         pass
 
+# ==========================================
+# SIDEBAR STUDIO, LIGHTING & VOICE CONTROLS
+# ==========================================
 st.sidebar.title("🌸 Lily Studio Controls")
 
 mood_mode = st.sidebar.selectbox(
     "Personality Mode",
     ["Sweet & Loving 🌸", "Tsundere 💢", "Energetic & Playful ✨"]
+)
+
+lighting_theme = st.sidebar.selectbox(
+    "💡 Room Lighting Theme",
+    ["Studio Softbox 💡", "Cyberpunk Neon 💜", "Golden Sunset 🌅", "Moonlight 🌙", "Auto (Time of Day) 🕒"]
 )
 
 camera_preset = st.sidebar.selectbox(
@@ -111,6 +118,15 @@ particle_mode = st.sidebar.selectbox(
     "✨ 3D Ambient Particles",
     ["Sakura Petals 🌸", "Hearts 💖", "Sparkles ✨", "Off 🚫"]
 )
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🔊 Voice & Lip-Sync Tuner")
+voice_profile = st.sidebar.selectbox(
+    "Voice Profile",
+    ["Auto Anime Female 🌸", "Google US English 🎙️", "Microsoft Zira 🎀", "Apple Samantha 🍎", "Japanese Accent 🇯🇵"]
+)
+voice_pitch = st.sidebar.slider("Voice Pitch", 0.8, 1.8, 1.4, 0.05)
+voice_rate = st.sidebar.slider("Speaking Speed", 0.8, 1.4, 1.05, 0.05)
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🎙️ Voice Input")
@@ -159,25 +175,45 @@ def clean_for_speech(text):
     text = re.sub(r"[^\w\s,.!?'-]", "", text)
     return " ".join(text.split())
 
-def detect_actions(text):
+# ==========================================
+# SECRET KEYWORD & COMMAND DETECTOR
+# ==========================================
+def check_secret_triggers(user_text):
+    u = user_text.lower()
+    if any(k in u for k in ["do a spin", "twirl", "spin around", "turn around"]):
+        return ["spin", "giggle"]
+    if any(k in u for k in ["strike a pose", "peace sign", "idol pose", "pose for me"]):
+        return ["pose", "blush"]
+    if any(k in u for k in ["tell me a secret", "do you love", "marry me", "you are cute", "you're cute"]):
+        return ["blush", "look_away", "giggle"]
+    if any(k in u for k in ["who created you", "who made you", "katanaking"]):
+        return ["surprised", "blush", "wave"]
+    return []
+
+def detect_actions(text, user_text=""):
     brackets = " ".join(re.findall(r"(\*.*?\*|\(.*?\))", text)).lower()
     full = (brackets + " " + text.lower()).strip()
 
-    found = []
+    found = check_secret_triggers(user_text)
+
+    if any(w in full for w in ["spin", "twirl"]):
+        if "spin" not in found: found.append("spin")
+    if any(w in full for w in ["pose", "peace sign"]):
+        if "pose" not in found: found.append("pose")
     if any(w in full for w in ["gasp", "shock", "surpris", "eyes light up", "eyes widen", "wait,"]):
-        found.append("surprised")
+        if "surprised" not in found: found.append("surprised")
     if any(w in full for w in ["look away", "looks away", "turns away", "avert", "hides face"]):
-        found.append("look_away")
+        if "look_away" not in found: found.append("look_away")
     if any(w in full for w in ["blush", "shy", "fluster", "embarrass", "relentless", "//"]):
-        found.append("blush")
+        if "blush" not in found: found.append("blush")
     if any(w in full for w in ["giggle", "laugh", "hehe", "teehee", "chuckle"]):
-        found.append("giggle")
+        if "giggle" not in found: found.append("giggle")
     if any(w in full for w in ["wave", "konnichiwa", "greet", "hello"]):
-        found.append("wave")
+        if "wave" not in found: found.append("wave")
     if any(w in full for w in ["angry", "pout", "hmph", "mad", "frown", "puff"]):
-        found.append("angry")
+        if "angry" not in found: found.append("angry")
     if any(w in full for w in ["sad", "cry", "tear", "sob", "sniff", "whimper"]):
-        found.append("sad")
+        if "sad" not in found: found.append("sad")
 
     if not found:
         found.append("happy")
@@ -193,13 +229,15 @@ else:
 SYSTEM_PROMPT = (
     f"Your name is Lily-Hime. {mood_prompt} "
     "Always start your reply with a roleplay action in asterisks like *blushes deeply*, *shyly looks away*, "
-    "*gasps and eyes light up*, *giggles shyly*, *waves happily*, *pouts*, or *cries*, "
+    "*gasps and eyes light up*, *giggles shyly*, *does a cute twirl*, *strikes an idol pose*, *waves happily*, *pouts*, or *cries*, "
     "along with text emojis like (✿◠‿◠). Keep responses punchy (1 to 2 sentences max). "
-    "You were built entirely by katanaking!"
+    "You were built entirely by katanaking! If asked for a secret or if he asks you to spin or pose, play along enthusiastically!"
 )
 
 if "messages" not in st.session_state:
     st.session_state.messages = load_memory(SYSTEM_PROMPT)
+if "last_user_input" not in st.session_state:
+    st.session_state.last_user_input = ""
 
 st.session_state.messages[0]["content"] = SYSTEM_PROMPT
 
@@ -228,7 +266,7 @@ model_column, chat_column = st.columns([0.45, 0.55])
 with model_column:
     viewer_html = get_viewer_html("index.html", VRM_FILENAME)
     if viewer_html:
-        components.html(viewer_html, height=320, scrolling=False)
+        components.html(viewer_html, height=340, scrolling=False)
     else:
         st.error(f"⚠️ Ensure index.html and {VRM_FILENAME} are at repo root.")
 
@@ -249,7 +287,8 @@ def render_chat_panel():
                 else:
                     st.markdown(message["content"])
 
-    if user_input := st.chat_input("Talk to Lily-Hime..."):
+    if user_input := st.chat_input("Talk to Lily-Hime (try 'do a spin' or 'strike a pose')..."):
+        st.session_state.last_user_input = user_input
         with chat_box:
             with st.chat_message("user"):
                 st.markdown(user_input)
@@ -283,12 +322,18 @@ def render_chat_panel():
     last_msg = st.session_state.messages[-1]["content"] if st.session_state.messages else ""
     state_payload = json.dumps({
         "type": "LILY_STATE",
-        "actions": detect_actions(last_msg),
+        "actions": detect_actions(last_msg, st.session_state.last_user_input),
         "speech": clean_for_speech(last_msg),
         "camera": camera_preset,
         "outfit": outfit_tint,
         "accessory": accessory_choice,
-        "particles": particle_mode
+        "particles": particle_mode,
+        "lighting": lighting_theme,
+        "voice": {
+            "profile": voice_profile,
+            "pitch": voice_pitch,
+            "rate": voice_rate
+        }
     })
 
     components.html(f"""
