@@ -84,81 +84,79 @@ def save_memory(messages):
     except Exception:
         pass
 
-# ==========================================
-# SIDEBAR STUDIO, LIGHTING & VOICE CONTROLS
-# ==========================================
-st.sidebar.title("🌸 Lily Studio Controls")
+with st.sidebar:
+    st.title("🌸 Lily Studio Controls")
 
-mood_mode = st.sidebar.selectbox(
-    "Personality Mode",
-    ["Sweet & Loving 🌸", "Tsundere 💢", "Energetic & Playful ✨"]
-)
+    mood_mode = st.selectbox(
+        "Personality Mode",
+        ["Sweet & Loving 🌸", "Tsundere 💢", "Energetic & Playful ✨"]
+    )
 
-lighting_theme = st.sidebar.selectbox(
-    "💡 Room Lighting Theme",
-    ["Studio Softbox 💡", "Cyberpunk Neon 💜", "Golden Sunset 🌅", "Moonlight 🌙", "Auto (Time of Day) 🕒"]
-)
+    lighting_theme = st.selectbox(
+        "💡 Room Lighting Theme",
+        ["Studio Softbox 💡", "Cyberpunk Neon 💜", "Golden Sunset 🌅", "Moonlight 🌙", "Auto (Time of Day) 🕒"]
+    )
 
-camera_preset = st.sidebar.selectbox(
-    "📷 Camera Framing",
-    ["Half-Body (Default)", "Close-Up Portrait", "Full-Body View"]
-)
+    camera_preset = st.selectbox(
+        "📷 Camera Framing",
+        ["Half-Body (Default)", "Close-Up Portrait", "Full-Body View"]
+    )
 
-outfit_tint = st.sidebar.selectbox(
-    "👗 Outfit Color Tint",
-    ["Original Pink 🌸", "Midnight Goth 🖤", "Cyber Cyan 💙", "Crimson Red ❤️", "Emerald Mint 💚"]
-)
+    outfit_tint = st.selectbox(
+        "👗 Outfit Color Tint",
+        ["Original Pink 🌸", "Midnight Goth 🖤", "Cyber Cyan 💙", "Crimson Red ❤️", "Emerald Mint 💚"]
+    )
 
-accessory_choice = st.sidebar.selectbox(
-    "🕶️ 3D Head Accessory",
-    ["None", "Cyber Neko Ears 🐱", "Angel Halo 😇", "Stylish Glasses 👓"]
-)
+    accessory_choice = st.selectbox(
+        "🕶️ 3D Head Accessory",
+        ["None", "Cyber Neko Ears 🐱", "Angel Halo 😇", "Stylish Glasses 👓"]
+    )
 
-particle_mode = st.sidebar.selectbox(
-    "✨ 3D Ambient Particles",
-    ["Sakura Petals 🌸", "Hearts 💖", "Sparkles ✨", "Off 🚫"]
-)
+    particle_mode = st.selectbox(
+        "✨ 3D Ambient Particles",
+        ["Sakura Petals 🌸", "Hearts 💖", "Sparkles ✨", "Off 🚫"]
+    )
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🔊 Voice & Lip-Sync Tuner")
-voice_profile = st.sidebar.selectbox(
-    "Voice Profile",
-    ["Auto Anime Female 🌸", "Google US English 🎙️", "Microsoft Zira 🎀", "Apple Samantha 🍎", "Japanese Accent 🇯🇵"]
-)
-voice_pitch = st.sidebar.slider("Voice Pitch", 0.8, 1.8, 1.4, 0.05)
-voice_rate = st.sidebar.slider("Speaking Speed", 0.8, 1.4, 1.05, 0.05)
+    st.markdown("---")
+    st.markdown("### 🔊 Voice & Lip-Sync Tuner")
+    voice_profile = st.selectbox(
+        "Voice Profile",
+        ["Auto Anime Female 🌸", "Google US English 🎙️", "Microsoft Zira 🎀", "Apple Samantha 🍎", "Japanese Accent 🇯🇵"]
+    )
+    voice_pitch = st.slider("Voice Pitch", 0.8, 1.8, 1.4, 0.05)
+    voice_rate = st.slider("Speaking Speed", 0.8, 1.4, 1.05, 0.05)
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 🎙️ Voice Input")
-mic_html = """
-<div style="text-align: center;">
-  <button onclick="startListening()" style="background:#ff69b4; color:white; border:none; padding:8px 14px; border-radius:18px; font-weight:bold; cursor:pointer;">🎙️ Tap to Speak</button>
-  <p id="mic-status" style="font-size:11px; color:#888; margin-top:5px;">Speak directly to Lily</p>
-</div>
-<script>
-function startListening() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { alert("Speech recognition requires Chrome."); return; }
-  const rec = new SR();
-  rec.lang = 'en-US';
-  const stEl = document.getElementById('mic-status');
-  stEl.textContent = "Listening...";
-  rec.onresult = (e) => {
-    const txt = e.results[0][0].transcript;
-    stEl.textContent = "Heard: " + txt;
-    const inp = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
-    if (inp) {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
-      setter.call(inp, txt);
-      inp.dispatchEvent(new Event('input', { bubbles: true }));
+    st.markdown("---")
+    st.markdown("### 🎙️ Voice Input")
+    mic_html = """
+    <div style="text-align: center; font-family: sans-serif;">
+      <button onclick="startListening()" style="background:#ff69b4; color:white; border:none; padding:8px 16px; border-radius:18px; font-weight:bold; cursor:pointer; width:100%;">🎙️ Tap to Speak</button>
+      <p id="mic-status" style="font-size:11px; color:#aaa; margin-top:6px; margin-bottom:0;">Speak directly to Lily</p>
+    </div>
+    <script>
+    function startListening() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { alert("Speech recognition requires Chrome."); return; }
+      const rec = new SR();
+      rec.lang = 'en-US';
+      const stEl = document.getElementById('mic-status');
+      stEl.textContent = "Listening...";
+      rec.onresult = (e) => {
+        const txt = e.results[0][0].transcript;
+        stEl.textContent = "Heard: " + txt;
+        const inp = window.parent.document.querySelector('textarea[data-testid="stChatInputTextArea"]');
+        if (inp) {
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+          setter.call(inp, txt);
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      };
+      rec.onerror = () => { stEl.textContent = "Mic error. Try again."; };
+      rec.start();
     }
-  };
-  rec.onerror = () => { stEl.textContent = "Mic error. Try again."; };
-  rec.start();
-}
-</script>
-"""
-components.html(mic_html, height=75)
+    </script>
+    """
+    components.html(mic_html, height=70)
 
 def get_viewer_html(html_path="index.html", vrm_path=VRM_FILENAME):
     if not os.path.exists(html_path) or not os.path.exists(vrm_path):
@@ -175,14 +173,13 @@ def clean_for_speech(text):
     text = re.sub(r"[^\w\s,.!?'-]", "", text)
     return " ".join(text.split())
 
-# ==========================================
-# SECRET KEYWORD & COMMAND DETECTOR
-# ==========================================
 def check_secret_triggers(user_text):
     u = user_text.lower()
+    if any(k in u for k in ["dance", "dancing", "boogie"]):
+        return ["dance", "spin", "happy"]
     if any(k in u for k in ["do a spin", "twirl", "spin around", "turn around"]):
         return ["spin", "giggle"]
-    if any(k in u for k in ["strike a pose", "peace sign", "idol pose", "pose for me"]):
+    if any(k in u for k in ["strike a pose", "peace sign", "idol pose", "pose"]):
         return ["pose", "blush"]
     if any(k in u for k in ["tell me a secret", "do you love", "marry me", "you are cute", "you're cute"]):
         return ["blush", "look_away", "giggle"]
@@ -196,6 +193,8 @@ def detect_actions(text, user_text=""):
 
     found = check_secret_triggers(user_text)
 
+    if any(w in full for w in ["dance", "dancing"]):
+        if "dance" not in found: found.append("dance")
     if any(w in full for w in ["spin", "twirl"]):
         if "spin" not in found: found.append("spin")
     if any(w in full for w in ["pose", "peace sign"]):
@@ -231,7 +230,7 @@ SYSTEM_PROMPT = (
     "Always start your reply with a roleplay action in asterisks like *blushes deeply*, *shyly looks away*, "
     "*gasps and eyes light up*, *giggles shyly*, *does a cute twirl*, *strikes an idol pose*, *waves happily*, *pouts*, or *cries*, "
     "along with text emojis like (✿◠‿◠). Keep responses punchy (1 to 2 sentences max). "
-    "You were built entirely by katanaking! If asked for a secret or if he asks you to spin or pose, play along enthusiastically!"
+    "You were built entirely by katanaking! If asked for a secret or if he asks you to spin, dance, or pose, play along enthusiastically!"
 )
 
 if "messages" not in st.session_state:
@@ -241,39 +240,40 @@ if "last_user_input" not in st.session_state:
 
 st.session_state.messages[0]["content"] = SYSTEM_PROMPT
 
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 💾 Memory & Export")
-chat_export_text = "\n\n".join(
-    [f"{m['role'].upper()}: {m['content']}" for m in st.session_state.messages if m["role"] != "system"]
-)
-st.sidebar.download_button(
-    label="📥 Download Chat (.txt)",
-    data=chat_export_text,
-    file_name="lily_hime_chat_log.txt",
-    mime="text/plain"
-)
-if st.sidebar.button("🗑️ Clear Chat Memory"):
-    if os.path.exists(MEMORY_FILE):
-        os.remove(MEMORY_FILE)
-    st.session_state.messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "assistant", "content": "*waves happily* Memory cleared! Fresh start, Master katanaking! (✿◠‿◠)"}
-    ]
-    st.rerun()
+with st.sidebar:
+    st.markdown("---")
+    st.markdown("### 💾 Memory & Export")
+    chat_export_text = "\n\n".join(
+        [f"{m['role'].upper()}: {m['content']}" for m in st.session_state.messages if m["role"] != "system"]
+    )
+    st.download_button(
+        label="📥 Download Chat (.txt)",
+        data=chat_export_text,
+        file_name="lily_hime_chat_log.txt",
+        mime="text/plain"
+    )
+    if st.button("🗑️ Clear Chat Memory"):
+        if os.path.exists(MEMORY_FILE):
+            os.remove(MEMORY_FILE)
+        st.session_state.messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "assistant", "content": "*waves happily* Memory cleared! Fresh start, Master katanaking! (✿◠‿◠)"}
+        ]
+        st.rerun()
 
-model_column, chat_column = st.columns([0.45, 0.55])
+model_column, chat_column = st.columns([0.46, 0.54])
 
 with model_column:
     viewer_html = get_viewer_html("index.html", VRM_FILENAME)
     if viewer_html:
-        components.html(viewer_html, height=340, scrolling=False)
+        components.html(viewer_html, height=420, scrolling=False)
     else:
         st.error(f"⚠️ Ensure index.html and {VRM_FILENAME} are at repo root.")
 
 @st.fragment
 def render_chat_panel():
     st.markdown("#### 🦊 Lily-Hime's Room 🌸")
-    chat_box = st.container(height=280)
+    chat_box = st.container(height=340)
 
     with chat_box:
         for message in st.session_state.messages:
@@ -287,7 +287,7 @@ def render_chat_panel():
                 else:
                     st.markdown(message["content"])
 
-    if user_input := st.chat_input("Talk to Lily-Hime (try 'do a spin' or 'strike a pose')..."):
+    if user_input := st.chat_input("Talk to Lily-Hime (try 'dance', 'do a spin', or 'strike a pose')..."):
         st.session_state.last_user_input = user_input
         with chat_box:
             with st.chat_message("user"):
