@@ -50,23 +50,30 @@
       pointer-events: none;
       z-index: 10;
     }
-    #snap-btn {
+    .bottom-controls {
       position: absolute;
       bottom: 8px;
       right: 10px;
+      display: flex;
+      gap: 6px;
+      z-index: 10;
+    }
+    .hud-btn {
       background: linear-gradient(135deg, #ff4da6, #ff85c0);
       color: white;
       border: none;
-      padding: 5px 12px;
+      padding: 5px 11px;
       border-radius: 14px;
       font-size: 11px;
       font-weight: bold;
       cursor: pointer;
       box-shadow: 0 2px 8px rgba(255, 77, 166, 0.4);
-      z-index: 10;
       transition: transform 0.15s ease;
     }
-    #snap-btn:hover { transform: scale(1.06); }
+    .hud-btn:hover { transform: scale(1.06); }
+    #fs-btn {
+      background: linear-gradient(135deg, #7928ca, #ff0080);
+    }
   </style>
   <script type="importmap">
     {
@@ -82,7 +89,10 @@
   <div id="status">🌸 Summoning Lily-Hime...</div>
   <div id="emotion-badge">✨ Ready</div>
   <div id="sound-hint">🔊 Tap Lily for headpat</div>
-  <button id="snap-btn" title="Take Wallpaper Screenshot">📸 Snap Photo</button>
+  <div class="bottom-controls">
+    <button id="snap-btn" class="hud-btn" title="Take Wallpaper Screenshot">📸 Snap</button>
+    <button id="fs-btn" class="hud-btn" title="Toggle True Full Screen">⛶ Full Screen</button>
+  </div>
 
   <script type="module">
     import * as THREE from 'three';
@@ -93,8 +103,8 @@
     const status = document.getElementById('status');
     const badge = document.getElementById('emotion-badge');
     const snapBtn = document.getElementById('snap-btn');
+    const fsBtn = document.getElementById('fs-btn');
 
-    // preserveDrawingBuffer: true is required for clean PNG screenshots!
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.0));
@@ -125,20 +135,15 @@
     const ambLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambLight);
 
-    // ==========================================
-    // 3D STAGE FLOOR & NEON GRID BUILDER
-    // ==========================================
     const stageGroup = new THREE.Group();
     scene.add(stageGroup);
 
-    // 1. Cyberpunk Synthwave Grid
     const neonGrid = new THREE.GridHelper(3.6, 18, 0xff2a85, 0x00f0ff);
     neonGrid.position.y = 0.01;
     neonGrid.material.transparent = true;
     neonGrid.material.opacity = 0.55;
     stageGroup.add(neonGrid);
 
-    // 2. Sakura Magic Circle Pedestal
     const sakuraCanvas = document.createElement('canvas');
     sakuraCanvas.width = 256; sakuraCanvas.height = 256;
     const sCtx = sakuraCanvas.getContext('2d');
@@ -164,7 +169,6 @@
     sakuraFloor.position.y = 0.01;
     stageGroup.add(sakuraFloor);
 
-    // 3. Studio Soft Pedestal
     const studioDisc = new THREE.Mesh(
       new THREE.CircleGeometry(0.75, 48),
       new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false })
@@ -254,8 +258,27 @@
     const raycaster = new THREE.Raycaster();
 
     // ==========================================
-    // PHOTO SNAPSHOT BUTTON HANDLER
+    // TRUE FULLSCREEN & SNAPSHOT HANDLERS
     // ==========================================
+    fsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const docEl = document.documentElement;
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        if (docEl.requestFullscreen) docEl.requestFullscreen();
+        else if (docEl.webkitRequestFullscreen) docEl.webkitRequestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      }
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+      fsBtn.textContent = document.fullscreenElement ? "✖ Exit Full" : "⛶ Full Screen";
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
     snapBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       activeActionsList = ["pose", "blush"];
@@ -647,7 +670,6 @@
       camera.position.lerp(camPosTarget, 0.08);
       controls.target.lerp(ctrlTarget, 0.08);
 
-      // Slowly rotate the Sakura Magic Circle floor
       if (sakuraFloor.visible) {
         sakuraFloor.rotation.z = t * 0.25;
       }
