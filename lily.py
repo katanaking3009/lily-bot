@@ -43,6 +43,7 @@ except Exception:
     st.error("⚠️ GROQ_API_KEY not found in secrets.")
     st.stop()
 
+MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
 avatar_img = "character.png" if os.path.exists("character.png") else "🌸"
 MEMORY_FILE = "chat_memory.json"
@@ -100,6 +101,11 @@ with st.sidebar:
     camera_preset = st.selectbox(
         "📷 Camera Framing",
         ["Half-Body (Default)", "Close-Up Portrait", "Full-Body View"]
+    )
+
+    stage_floor = st.selectbox(
+        "🛸 3D Stage Floor",
+        ["Sakura Circle 🌸", "Cyberpunk Neon Grid 💜", "Studio Disc ⚪", "None 🚫"]
     )
 
     outfit_tint = st.selectbox(
@@ -230,7 +236,7 @@ SYSTEM_PROMPT = (
     "Always start your reply with a roleplay action in asterisks like *blushes deeply*, *shyly looks away*, "
     "*gasps and eyes light up*, *giggles shyly*, *does a cute twirl*, *strikes an idol pose*, *waves happily*, *pouts*, or *cries*, "
     "along with text emojis like (✿◠‿◠). Keep responses punchy (1 to 2 sentences max). "
-    "You were built entirely by katanaking! If asked for a secret or if he asks you to spin, dance, or pose, play along enthusiastically!"
+    "You were built entirely by katanaking! If shown an image, react enthusiastically to what you see in it!"
 )
 
 if "messages" not in st.session_state:
@@ -266,14 +272,20 @@ model_column, chat_column = st.columns([0.46, 0.54])
 with model_column:
     viewer_html = get_viewer_html("index.html", VRM_FILENAME)
     if viewer_html:
-        components.html(viewer_html, height=420, scrolling=False)
+        components.html(viewer_html, height=430, scrolling=False)
     else:
         st.error(f"⚠️ Ensure index.html and {VRM_FILENAME} are at repo root.")
 
 @st.fragment
 def render_chat_panel():
     st.markdown("#### 🦊 Lily-Hime's Room 🌸")
-    chat_box = st.container(height=340)
+
+    with st.expander("📸 Show Lily an Image / Screenshot (Vision Mode)", expanded=False):
+        uploaded_img = st.file_uploader("Upload an image for Lily to see", type=["png", "jpg", "jpeg", "webp"], label_visibility="collapsed")
+        if uploaded_img:
+            st.image(uploaded_img, width=160, caption="Ready to show Lily!")
+
+    chat_box = st.container(height=300)
 
     with chat_box:
         for message in st.session_state.messages:
@@ -287,29 +299,37 @@ def render_chat_panel():
                 else:
                     st.markdown(message["content"])
 
-    if user_input := st.chat_input("Talk to Lily-Hime (try 'dance', 'do a spin', or 'strike a pose')..."):
+    if user_input := st.chat_input("Talk to Lily-Hime (try 'dance', 'do a spin', or upload an image)..."):
         st.session_state.last_user_input = user_input
+        display_text = f"🖼️ *[Shared an image]* {user_input}" if uploaded_img else user_input
+
         with chat_box:
             with st.chat_message("user"):
-                st.markdown(user_input)
-            st.session_state.messages.append({"role": "user", "content": user_input})
+                st.markdown(display_text)
+            st.session_state.messages.append({"role": "user", "content": display_text})
 
             try:
                 with st.chat_message("assistant", avatar=avatar_img):
-                    try:
-                        response = client.chat.completions.create(
-                            model="llama-3.3-70b-versatile",
-                            messages=st.session_state.messages[-10:],
-                            max_tokens=90,
-                            temperature=0.7
-                        )
-                    except Exception:
-                        response = client.chat.completions.create(
-                            model="qwen/qwen3.8-27b",
-                            messages=st.session_state.messages[-10:],
-                            max_tokens=90,
-                            temperature=0.7
-                        )
+                    api_messages = [m.copy() for m in st.session_state.messages[-10:]]
+
+                    # If an image is attached, format the latest user message as a multimodal vision payload
+                    if uploaded_img is not None:
+                        b64_img = base64.b64encode(uploaded_img.getvalue()).decode("utf-8")
+                        mime = uploaded_img.type or "image/jpeg"
+                        api_messages[-1] = {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": user_input},
+                                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64_img}"}}
+                            ]
+                        }
+
+                    response = client.chat.completions.create(
+                        model=MODEL_NAME,
+                        messages=api_messages,
+                        max_tokens=90,
+                        temperature=0.7
+                    )
                     lily_response = response.choices[0].message.content
                     bubble = f'<div class="anime-bubble">{lily_response}</div>'
                     st.markdown(bubble, unsafe_allow_html=True)
@@ -325,6 +345,7 @@ def render_chat_panel():
         "actions": detect_actions(last_msg, st.session_state.last_user_input),
         "speech": clean_for_speech(last_msg),
         "camera": camera_preset,
+        "stage": stage_floor,
         "outfit": outfit_tint,
         "accessory": accessory_choice,
         "particles": particle_mode,
