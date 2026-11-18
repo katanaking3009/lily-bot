@@ -50,6 +50,23 @@
       pointer-events: none;
       z-index: 10;
     }
+    #snap-btn {
+      position: absolute;
+      bottom: 8px;
+      right: 10px;
+      background: linear-gradient(135deg, #ff4da6, #ff85c0);
+      color: white;
+      border: none;
+      padding: 5px 12px;
+      border-radius: 14px;
+      font-size: 11px;
+      font-weight: bold;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(255, 77, 166, 0.4);
+      z-index: 10;
+      transition: transform 0.15s ease;
+    }
+    #snap-btn:hover { transform: scale(1.06); }
   </style>
   <script type="importmap">
     {
@@ -64,7 +81,8 @@
 <body>
   <div id="status">🌸 Summoning Lily-Hime...</div>
   <div id="emotion-badge">✨ Ready</div>
-  <div id="sound-hint">🔊 Tap Lily for voice / reaction</div>
+  <div id="sound-hint">🔊 Tap Lily for headpat</div>
+  <button id="snap-btn" title="Take Wallpaper Screenshot">📸 Snap Photo</button>
 
   <script type="module">
     import * as THREE from 'three';
@@ -74,10 +92,12 @@
 
     const status = document.getElementById('status');
     const badge = document.getElementById('emotion-badge');
+    const snapBtn = document.getElementById('snap-btn');
 
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    // preserveDrawingBuffer: true is required for clean PNG screenshots!
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.8));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2.0));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.98;
     document.body.appendChild(renderer.domElement);
@@ -104,6 +124,61 @@
 
     const ambLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambLight);
+
+    // ==========================================
+    // 3D STAGE FLOOR & NEON GRID BUILDER
+    // ==========================================
+    const stageGroup = new THREE.Group();
+    scene.add(stageGroup);
+
+    // 1. Cyberpunk Synthwave Grid
+    const neonGrid = new THREE.GridHelper(3.6, 18, 0xff2a85, 0x00f0ff);
+    neonGrid.position.y = 0.01;
+    neonGrid.material.transparent = true;
+    neonGrid.material.opacity = 0.55;
+    stageGroup.add(neonGrid);
+
+    // 2. Sakura Magic Circle Pedestal
+    const sakuraCanvas = document.createElement('canvas');
+    sakuraCanvas.width = 256; sakuraCanvas.height = 256;
+    const sCtx = sakuraCanvas.getContext('2d');
+    sCtx.strokeStyle = '#ff69b4';
+    sCtx.lineWidth = 5;
+    sCtx.beginPath(); sCtx.arc(128, 128, 115, 0, Math.PI * 2); sCtx.stroke();
+    sCtx.strokeStyle = '#ffb3d9';
+    sCtx.lineWidth = 3;
+    sCtx.beginPath(); sCtx.arc(128, 128, 88, 0, Math.PI * 2); sCtx.stroke();
+    for (let i = 0; i < 8; i++) {
+      const ang = (i * Math.PI) / 4;
+      sCtx.beginPath();
+      sCtx.moveTo(128 + Math.cos(ang) * 45, 128 + Math.sin(ang) * 45);
+      sCtx.lineTo(128 + Math.cos(ang) * 115, 128 + Math.sin(ang) * 115);
+      sCtx.stroke();
+    }
+    const sakuraTex = new THREE.CanvasTexture(sakuraCanvas);
+    const sakuraFloor = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.6, 1.6),
+      new THREE.MeshBasicMaterial({ map: sakuraTex, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false })
+    );
+    sakuraFloor.rotation.x = -Math.PI / 2;
+    sakuraFloor.position.y = 0.01;
+    stageGroup.add(sakuraFloor);
+
+    // 3. Studio Soft Pedestal
+    const studioDisc = new THREE.Mesh(
+      new THREE.CircleGeometry(0.75, 48),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, depthWrite: false })
+    );
+    studioDisc.rotation.x = -Math.PI / 2;
+    studioDisc.position.y = 0.005;
+    stageGroup.add(studioDisc);
+
+    function applyStageFloor(floorMode) {
+      neonGrid.visible = floorMode.includes("Neon Grid");
+      sakuraFloor.visible = floorMode.includes("Sakura Circle");
+      studioDisc.visible = floorMode.includes("Studio Disc");
+    }
+    applyStageFloor("Sakura Circle 🌸");
 
     function applyLightingTheme(theme) {
       if (!theme || theme.includes("Auto")) {
@@ -155,7 +230,7 @@
     const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
 
     let currentVrm = null;
-    let baseRotationY = 0.0; // Preserves VRM0 front-facing rotation!
+    let baseRotationY = 0.0;
     let blushGroup = null;
     let accObjects = {};
     let activeActionsList = ["wave"];
@@ -177,6 +252,24 @@
 
     const pointer = new THREE.Vector2(0, 0);
     const raycaster = new THREE.Raycaster();
+
+    // ==========================================
+    // PHOTO SNAPSHOT BUTTON HANDLER
+    // ==========================================
+    snapBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      activeActionsList = ["pose", "blush"];
+      actionDuration = 4.0;
+      badge.textContent = "📸 Cheese! (✿◠‿◠)";
+      setTimeout(() => {
+        renderer.render(scene, camera);
+        const dataUrl = renderer.domElement.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.download = "lily_hime_snapshot.png";
+        link.href = dataUrl;
+        link.click();
+      }, 180);
+    });
 
     function makeParticleTexture(mode) {
       const c = document.createElement('canvas');
@@ -430,13 +523,9 @@
     window.applyLilyPayload = (data) => {
       if (!data) return;
 
-      if (data.voice) {
-        voiceSettings = data.voice;
-      }
-
-      if (data.lighting) {
-        applyLightingTheme(data.lighting);
-      }
+      if (data.voice) voiceSettings = data.voice;
+      if (data.lighting) applyLightingTheme(data.lighting);
+      if (data.stage) applyStageFloor(data.stage);
 
       if (data.actions) {
         activeActionsList = data.actions;
@@ -461,16 +550,13 @@
         badge.style.display = "block";
       }
 
-      if (data.speech) {
-        speakNow(data.speech);
-      }
+      if (data.speech) speakNow(data.speech);
 
       if (data.camera) {
         if (data.camera.includes("Close-Up")) {
           camPosTarget.set(0.0, 1.36, 0.95);
           ctrlTarget.set(0.0, 1.33, 0.0);
         } else if (data.camera.includes("Full-Body")) {
-          // Perfectly frames head-to-toe without cutting off her head!
           camPosTarget.set(0.0, 1.05, 3.15);
           ctrlTarget.set(0.0, 0.98, 0.0);
         } else {
@@ -522,7 +608,6 @@
         const vrm = gltf.userData.vrm;
         VRMUtils.removeUnnecessaryVertices(gltf.scene);
         VRMUtils.rotateVRM0(vrm);
-        // Save the front-facing Y rotation so she NEVER flips backwards!
         baseRotationY = vrm.scene.rotation.y;
         vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
 
@@ -562,6 +647,11 @@
       camera.position.lerp(camPosTarget, 0.08);
       controls.target.lerp(ctrlTarget, 0.08);
 
+      // Slowly rotate the Sakura Magic Circle floor
+      if (sakuraFloor.visible) {
+        sakuraFloor.rotation.z = t * 0.25;
+      }
+
       if (particleSystem.visible) {
         const posArr = particleSystem.geometry.attributes.position.array;
         const isRising = currentParticleMode.includes("Hearts");
@@ -582,7 +672,6 @@
         const h = currentVrm.humanoid;
         const exp = currentVrm.expressionManager;
 
-        // 360 Spin Trigger Animation (Added ON TOP of baseRotationY so she always faces front!)
         if (spinTimer > 0) {
           spinTimer -= delta;
           const progress = Math.max(0, 1.0 - (spinTimer / 1.6));
@@ -667,7 +756,6 @@
             headZ = 0.12;
           }
           if (has("pose")) {
-            // Placed AFTER blush so Idol Pose arms aren't overwritten!
             headZ = -0.16;
             headX = 0.05;
             spineZ = 0.06;
