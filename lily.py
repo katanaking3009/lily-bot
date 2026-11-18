@@ -88,6 +88,12 @@ def save_memory(messages):
 with st.sidebar:
     st.title("🌸 Lily Studio Controls")
 
+    layout_mode = st.radio(
+        "🖥️ View Layout Mode",
+        ["Split Studio View columns", "Full-Screen Theater HUD 🎬"],
+        index=0
+    )
+
     mood_mode = st.selectbox(
         "Personality Mode",
         ["Sweet & Loving 🌸", "Tsundere 💢", "Energetic & Playful ✨"]
@@ -267,25 +273,19 @@ with st.sidebar:
         ]
         st.rerun()
 
-model_column, chat_column = st.columns([0.46, 0.54])
-
-with model_column:
-    viewer_html = get_viewer_html("index.html", VRM_FILENAME)
-    if viewer_html:
-        components.html(viewer_html, height=430, scrolling=False)
-    else:
-        st.error(f"⚠️ Ensure index.html and {VRM_FILENAME} are at repo root.")
+is_fullscreen_hud = "Full-Screen" in layout_mode
 
 @st.fragment
-def render_chat_panel():
-    st.markdown("#### 🦊 Lily-Hime's Room 🌸")
+def render_chat_panel(box_height=300):
+    if not is_fullscreen_hud:
+        st.markdown("#### 🦊 Lily-Hime's Room 🌸")
 
     with st.expander("📸 Show Lily an Image / Screenshot (Vision Mode)", expanded=False):
         uploaded_img = st.file_uploader("Upload an image for Lily to see", type=["png", "jpg", "jpeg", "webp"], label_visibility="collapsed")
         if uploaded_img:
             st.image(uploaded_img, width=160, caption="Ready to show Lily!")
 
-    chat_box = st.container(height=300)
+    chat_box = st.container(height=box_height)
 
     with chat_box:
         for message in st.session_state.messages:
@@ -312,7 +312,6 @@ def render_chat_panel():
                 with st.chat_message("assistant", avatar=avatar_img):
                     api_messages = [m.copy() for m in st.session_state.messages[-10:]]
 
-                    # If an image is attached, format the latest user message as a multimodal vision payload
                     if uploaded_img is not None:
                         b64_img = base64.b64encode(uploaded_img.getvalue()).decode("utf-8")
                         mime = uploaded_img.type or "image/jpeg"
@@ -368,5 +367,22 @@ def render_chat_panel():
     </script>
     """, height=0)
 
-with chat_column:
-    render_chat_panel()
+viewer_html = get_viewer_html("index.html", VRM_FILENAME)
+
+if is_fullscreen_hud:
+    # Full-Width Theater Stage (640px tall) + Compact Visual-Novel HUD Drawer underneath
+    if viewer_html:
+        components.html(viewer_html, height=640, scrolling=False)
+    else:
+        st.error(f"⚠️ Ensure index.html and {VRM_FILENAME} are at repo root.")
+    render_chat_panel(box_height=180)
+else:
+    # Classic Split Studio View
+    model_column, chat_column = st.columns([0.46, 0.54])
+    with model_column:
+        if viewer_html:
+            components.html(viewer_html, height=430, scrolling=False)
+        else:
+            st.error(f"⚠️ Ensure index.html and {VRM_FILENAME} are at repo root.")
+    with chat_column:
+        render_chat_panel(box_height=300)
