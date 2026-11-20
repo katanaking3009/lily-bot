@@ -86,9 +86,9 @@
   </script>
 </head>
 <body>
-  <div id="status">🌸 Summoning Lily-Hime...</div>
+  <div id="status">🌸 Summoning __CHAR_NAME__...</div>
   <div id="emotion-badge">✨ Ready</div>
-  <div id="sound-hint">🔊 Tap Lily for headpat</div>
+  <div id="sound-hint">🔊 Tap __CHAR_NAME__ for headpat</div>
   <div class="bottom-controls">
     <button id="snap-btn" class="hud-btn" title="Take Wallpaper Screenshot">📸 Snap</button>
     <button id="fs-btn" class="hud-btn" title="Toggle True Full Screen">⛶ Full Screen</button>
@@ -104,6 +104,7 @@
     const badge = document.getElementById('emotion-badge');
     const snapBtn = document.getElementById('snap-btn');
     const fsBtn = document.getElementById('fs-btn');
+    const activeCharName = "__CHAR_NAME__";
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -227,12 +228,6 @@
     }
     applyLightingTheme("Auto");
 
-    const b64 = "__VRM_BASE64__";
-    const bin = atob(b64);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
-
     let currentVrm = null;
     let baseRotationY = 0.0;
     let blushGroup = null;
@@ -257,9 +252,6 @@
     const pointer = new THREE.Vector2(0, 0);
     const raycaster = new THREE.Raycaster();
 
-    // ==========================================
-    // TRUE FULLSCREEN & SNAPSHOT HANDLERS
-    // ==========================================
     fsBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       const docEl = document.documentElement;
@@ -288,7 +280,7 @@
         renderer.render(scene, camera);
         const dataUrl = renderer.domElement.toDataURL("image/png");
         const link = document.createElement("a");
-        link.download = "lily_hime_snapshot.png";
+        link.download = `${activeCharName.toLowerCase().replace(/\s+/g, '_')}_snapshot.png`;
         link.href = dataUrl;
         link.click();
       }, 180);
@@ -531,7 +523,7 @@
           badge.textContent = "💖 Headpat Reaction!";
           badge.style.display = "block";
           lastSpokenText = "";
-          speakNow("Ehehe! Master katanaking, your headpats make me so happy!");
+          speakNow(`Ehehe! Master katanaking, your headpats make ${activeCharName} so happy!`);
           setTimeout(() => { touchReaction = false; }, 4500);
           return;
         }
@@ -625,42 +617,62 @@
     loader.register((parser) => new VRMLoaderPlugin(parser));
     const clock = new THREE.Clock();
 
-    loader.load(
-      blobUrl,
-      (gltf) => {
-        const vrm = gltf.userData.vrm;
-        VRMUtils.removeUnnecessaryVertices(gltf.scene);
-        VRMUtils.rotateVRM0(vrm);
-        baseRotationY = vrm.scene.rotation.y;
-        vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
+    function loadVrmFromBase64(b64String) {
+      status.style.display = 'block';
+      status.textContent = `🌸 Summoning ${activeCharName}...`;
 
-        const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
-        if (headNode) {
-          blushGroup = createAnimeBlush(headNode);
-          accObjects = createAccessories(headNode);
-        }
-
-        scene.add(vrm.scene);
-
-        const h = vrm.humanoid;
-        const lArm = h?.getNormalizedBoneNode('leftUpperArm');
-        const rArm = h?.getNormalizedBoneNode('rightUpperArm');
-        if (lArm) lArm.rotation.z = 1.18;
-        if (rArm) rArm.rotation.z = -1.18;
-
-        vrm.update(0.016);
-        vrm.springBoneManager?.reset();
-        clock.start();
-
-        currentVrm = vrm;
-        status.style.display = 'none';
-      },
-      undefined,
-      (err) => {
-        status.textContent = "⚠️ Error: " + err.message;
-        console.error(err);
+      // Dispose previous VRM cleanly from GPU memory
+      if (currentVrm) {
+        scene.remove(currentVrm.scene);
+        VRMUtils.deepDispose(currentVrm.scene);
+        currentVrm = null;
       }
-    );
+
+      const bin = atob(b64String);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+
+      loader.load(
+        blobUrl,
+        (gltf) => {
+          const vrm = gltf.userData.vrm;
+          VRMUtils.removeUnnecessaryVertices(gltf.scene);
+          VRMUtils.rotateVRM0(vrm);
+          baseRotationY = vrm.scene.rotation.y;
+          vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
+
+          const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
+          if (headNode) {
+            blushGroup = createAnimeBlush(headNode);
+            accObjects = createAccessories(headNode);
+          }
+
+          scene.add(vrm.scene);
+
+          const h = vrm.humanoid;
+          const lArm = h?.getNormalizedBoneNode('leftUpperArm');
+          const rArm = h?.getNormalizedBoneNode('rightUpperArm');
+          if (lArm) lArm.rotation.z = 1.18;
+          if (rArm) rArm.rotation.z = -1.18;
+
+          vrm.update(0.016);
+          vrm.springBoneManager?.reset();
+          clock.start();
+
+          currentVrm = vrm;
+          status.style.display = 'none';
+          URL.revokeObjectURL(blobUrl);
+        },
+        undefined,
+        (err) => {
+          status.textContent = "⚠️ Error: " + err.message;
+          console.error(err);
+        }
+      );
+    }
+
+    loadVrmFromBase64("__VRM_BASE64__");
 
     function animate() {
       requestAnimationFrame(animate);
