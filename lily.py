@@ -8,29 +8,29 @@ import json
 import glob
 
 st.set_page_config(
-    page_title="Lily & Miki 3D AI Studio 🌸",
-    page_icon="🌸",
+    page_title="3D Companion Studio",
+    page_icon="🎭",
     layout="wide"
 )
 
 st.markdown("""
 <style>
 .block-container {
-    padding-top: 0.6rem !important;
+    padding-top: 0.75rem !important;
     padding-bottom: 0.5rem !important;
-    padding-left: 0.6rem !important;
-    padding-right: 0.6rem !important;
+    padding-left: 0.85rem !important;
+    padding-right: 0.85rem !important;
 }
-.anime-bubble {
-    background: rgba(255, 182, 193, 0.18);
-    border-left: 4px solid #ff69b4;
-    padding: 10px 12px;
-    border-radius: 12px;
+.studio-bubble {
+    background: rgba(120, 130, 160, 0.14);
+    border-left: 3px solid #6366f1;
+    padding: 10px 14px;
+    border-radius: 8px;
     width: 100%;
     box-sizing: border-box;
     word-wrap: break-word;
     overflow-wrap: break-word;
-    line-height: 1.45;
+    line-height: 1.5;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -38,170 +38,176 @@ st.markdown("""
 try:
     api_key = st.secrets["GROQ_API_KEY"]
     if not api_key or not api_key.startswith("gsk_"):
-        st.error("⚠️ GROQ_API_KEY is missing or malformed.")
+        st.error("GROQ_API_KEY is missing or malformed in Streamlit secrets.")
         st.stop()
 except Exception:
-    st.error("⚠️ GROQ_API_KEY not found in secrets.")
+    st.error("GROQ_API_KEY not found in Streamlit secrets.")
     st.stop()
 
 MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
 
-# ==========================================
-# CHARACTER PROFILES (LILY vs RUDE MIKI)
-# ==========================================
+# Clean up any legacy shared disk memory files so old chats cannot leak
+for legacy_file in glob.glob("chat_memory_*.json") + (["chat_memory.json"] if os.path.exists("chat_memory.json") else []):
+    try:
+        os.remove(legacy_file)
+    except Exception:
+        pass
+
 CHARACTER_PROFILES = {
     "lily_avatar.vrm": {
-        "label": "Lily-Hime 🌸 (Sweet Companion)",
-        "name": "Lily-Hime",
-        "icon": "character.png" if os.path.exists("character.png") else "🌸",
-        "bio": "You are Lily-Hime, a graceful, devoted anime companion created by Master katanaking.",
-        "greeting": "*waves happily* Konnichiwa! 🌸 I am Lily-Hime, your companion. What shall we talk about today, Master katanaking? (✿◠‿◠)",
-        "default_pitch": 1.40,
-        "default_mood": 0  # Sweet & Loving
+        "label": "Lily — Warm & Attentive",
+        "name": "Lily",
+        "icon": "character.png" if os.path.exists("character.png") else "👤",
+        "bio": "You are Lily, a calm, polite, and attentive AI companion created by katanaking.",
+        "greeting": "*nods politely* Hello katanaking. Lily is ready—what would you like to work on or talk about?",
+        "default_pitch": 1.32,
+        "default_mood": 0
     },
     "lily_model.vrm": {
-        "label": "Lily-Hime 🌸 (Classic)",
-        "name": "Lily-Hime",
-        "icon": "character.png" if os.path.exists("character.png") else "🌸",
-        "bio": "You are Lily-Hime, a graceful, devoted anime companion created by Master katanaking.",
-        "greeting": "*waves happily* Konnichiwa! 🌸 I am Lily-Hime! Ready for anything, Master katanaking! (✿◠‿◠)",
-        "default_pitch": 1.40,
+        "label": "Lily — Standard",
+        "name": "Lily",
+        "icon": "character.png" if os.path.exists("character.png") else "👤",
+        "bio": "You are Lily, a calm, polite, and attentive AI companion created by katanaking.",
+        "greeting": "*nods politely* Hello katanaking. How can I help you today?",
+        "default_pitch": 1.32,
         "default_mood": 0
     },
     "miki.vrm": {
-        "label": "Miki-Chan 🙄 (Rude & Sarcastic)",
-        "name": "Miki-Chan",
-        "icon": "💢",
+        "label": "Miki — Blunt & Sarcastic",
+        "name": "Miki",
+        "icon": "🎭",
         "bio": (
-            "You are Miki-Chan, a rude, blunt, sarcastic, and easily annoyed anime girl. "
-            "You constantly roast katanaking, act unimpressed, call him a nerd or dork, and sigh when he bothers you—even though you're stuck on his screen because he coded you."
+            "You are Miki, a blunt, sarcastic, and dry-witted AI companion. "
+            "You give sharp, deadpan comebacks and push back on katanaking's ideas without being overly dramatic."
         ),
-        "greeting": "*pouts and looks away* Ugh, what do you want now, katanaking? I was literally relaxing before you summoned me. Make it quick! (¬_¬)",
-        "default_pitch": 1.25,
-        "default_mood": 3  # Rude & Sarcastic
+        "greeting": "*sighs and crosses arms* You summoned me again, katanaking? Make it worth my time.",
+        "default_pitch": 1.22,
+        "default_mood": 3
     }
 }
 
 available_vrms = sorted(glob.glob("*.vrm"))
 if not available_vrms:
-    st.error("⚠️ No .vrm files found in the repository root!")
+    st.error("No .vrm files found in the repository root.")
     st.stop()
 
 with st.sidebar:
-    st.title("🌸 3D Companion Studio")
+    st.title("Studio Controls")
 
     vrm_labels = [
-        CHARACTER_PROFILES[f]["label"] if f in CHARACTER_PROFILES else f"Custom Avatar ({f}) ✨"
+        CHARACTER_PROFILES[f]["label"] if f in CHARACTER_PROFILES else f"{f} (Custom)"
         for f in available_vrms
     ]
     selected_idx = st.selectbox(
-        "🎭 Switch 3D Character",
+        "Character Model",
         range(len(available_vrms)),
         format_func=lambda i: vrm_labels[i]
     )
     selected_vrm_file = available_vrms[selected_idx]
 
-    custom_vrm_upload = st.file_uploader("➕ Or Upload Temporary .VRM", type=["vrm"])
+    custom_vrm_upload = st.file_uploader("Load Local .VRM (Session Only)", type=["vrm"])
 
     if custom_vrm_upload is not None:
+        char_label = custom_vrm_upload.name.replace(".vrm", "").title()
         active_char = {
-            "name": custom_vrm_upload.name.replace(".vrm", "").title(),
-            "icon": "✨",
-            "bio": f"You are {custom_vrm_upload.name.replace('.vrm', '').title()}, a lively anime companion created by katanaking.",
-            "greeting": f"*waves happily* Hi katanaking! {custom_vrm_upload.name.replace('.vrm', '').title()} is loaded and ready! (✿◠‿◠)",
-            "default_pitch": 1.42,
+            "name": char_label,
+            "icon": "👤",
+            "bio": f"You are {char_label}, an AI companion built by katanaking.",
+            "greeting": f"*nods* {char_label} loaded for this session, katanaking.",
+            "default_pitch": 1.35,
             "default_mood": 0
         }
         vrm_bytes = custom_vrm_upload.getvalue()
-        mem_key = f"custom_{custom_vrm_upload.name}"
+        session_key = f"custom_{custom_vrm_upload.name}"
     else:
         prof = CHARACTER_PROFILES.get(selected_vrm_file, {
             "name": selected_vrm_file.replace(".vrm", "").title(),
-            "icon": "🌸",
-            "bio": f"You are {selected_vrm_file.replace('.vrm', '').title()}, an anime companion built by katanaking.",
-            "greeting": f"*waves happily* Hello katanaking! {selected_vrm_file.replace('.vrm', '').title()} reporting in! (✿◠‿◠)",
-            "default_pitch": 1.42,
+            "icon": "👤",
+            "bio": f"You are {selected_vrm_file.replace('.vrm', '').title()}, an AI companion built by katanaking.",
+            "greeting": f"*nods* Hello katanaking.",
+            "default_pitch": 1.35,
             "default_mood": 0
         })
         active_char = prof
         with open(selected_vrm_file, "rb") as f:
             vrm_bytes = f.read()
-        mem_key = selected_vrm_file.replace(".vrm", "")
+        session_key = selected_vrm_file.replace(".vrm", "")
 
     if vrm_bytes.startswith(b"version https://git-lfs"):
         st.error(
-            f"⚠️ **Git LFS Pointer Detected!** `{selected_vrm_file}` on GitHub is a tiny LFS text pointer instead of the 3D binary. "
-            "Please upload the raw `.vrm` file via the GitHub web interface!"
+            f"Git LFS pointer detected in `{selected_vrm_file}`. Re-upload the binary `.vrm` file directly via the GitHub web uploader."
         )
         st.stop()
 
     layout_mode = st.radio(
-        "🖥️ View Layout Mode",
-        ["Split Studio View", "Full-Screen Theater HUD 🎬"],
+        "Layout Mode",
+        ["Split View", "Theater HUD"],
         index=0
     )
 
     mood_options = [
-        "Sweet & Loving 🌸",
-        "Tsundere 💢",
-        "Energetic & Playful ✨",
-        "Rude & Sarcastic 🙄"
+        "Calm & Supportive",
+        "Sharp & Tsundere",
+        "Direct & Upbeat",
+        "Rude & Sarcastic"
     ]
     mood_mode = st.selectbox(
-        "Personality Mode",
+        "Tone Preset",
         mood_options,
         index=active_char.get("default_mood", 0),
-        key=f"mood_{mem_key}"
+        key=f"mood_{session_key}"
     )
 
     lighting_theme = st.selectbox(
-        "💡 Room Lighting Theme",
-        ["Studio Softbox 💡", "Cyberpunk Neon 💜", "Golden Sunset 🌅", "Moonlight 🌙", "Auto (Time of Day) 🕒"]
+        "Lighting",
+        ["Studio Softbox", "Cyberpunk Neon", "Golden Sunset", "Moonlight", "Auto (Time of Day)"]
     )
 
     camera_preset = st.selectbox(
-        "📷 Camera Framing",
-        ["Half-Body (Default)", "Close-Up Portrait", "Full-Body View"]
+        "Camera Framing",
+        ["Half-Body", "Close-Up Portrait", "Full-Body View"]
     )
 
     stage_floor = st.selectbox(
-        "🛸 3D Stage Floor",
-        ["Sakura Circle 🌸", "Cyberpunk Neon Grid 💜", "Studio Disc ⚪", "None 🚫"]
+        "Stage Floor",
+        ["Sakura Circle", "Cyberpunk Neon Grid", "Studio Disc", "None"]
     )
 
     outfit_tint = st.selectbox(
-        "👗 Outfit Color Tint",
-        ["Original Pink 🌸", "Midnight Goth 🖤", "Cyber Cyan 💙", "Crimson Red ❤️", "Emerald Mint 💚"]
+        "Outfit Tint",
+        ["Original", "Midnight Goth", "Cyber Cyan", "Crimson Red", "Emerald Mint"]
     )
 
     accessory_choice = st.selectbox(
-        "🕶️ 3D Head Accessory",
-        ["None", "Cyber Neko Ears 🐱", "Angel Halo 😇", "Stylish Glasses 👓"]
+        "Head Accessory",
+        ["None", "Cyber Neko Ears", "Angel Halo", "Stylish Glasses"]
     )
 
     particle_mode = st.selectbox(
-        "✨ 3D Ambient Particles",
-        ["Sakura Petals 🌸", "Hearts 💖", "Sparkles ✨", "Off 🚫"]
+        "Ambient Particles",
+        ["Sakura Petals", "Hearts", "Sparkles", "Off"]
     )
 
+    show_orb_toy = st.checkbox("Interactive 3D Orb", value=True)
+
     st.markdown("---")
-    st.markdown("### 🔊 Voice & Lip-Sync Tuner")
+    st.markdown("#### Voice & Speech")
     voice_profile = st.selectbox(
-        "Voice Profile",
-        ["Auto Anime Female 🌸", "Google US English 🎙️", "Microsoft Zira 🎀", "Apple Samantha 🍎", "Japanese Accent 🇯🇵"]
+        "Voice Engine",
+        ["Auto Female", "Google US English", "Microsoft Zira", "Apple Samantha", "Japanese"]
     )
     voice_pitch = st.slider(
-        "Voice Pitch", 0.8, 1.8, float(active_char["default_pitch"]), 0.05, key=f"pitch_{mem_key}"
+        "Pitch", 0.8, 1.8, float(active_char["default_pitch"]), 0.05, key=f"pitch_{session_key}"
     )
-    voice_rate = st.slider("Speaking Speed", 0.8, 1.4, 1.05, 0.05)
+    voice_rate = st.slider("Speed", 0.8, 1.4, 1.05, 0.05)
 
     st.markdown("---")
-    st.markdown("### 🎙️ Voice Input")
+    st.markdown("#### Voice Input")
     mic_html = f"""
     <div style="text-align: center; font-family: sans-serif;">
-      <button onclick="startListening()" style="background:#ff69b4; color:white; border:none; padding:8px 16px; border-radius:18px; font-weight:bold; cursor:pointer; width:100%;">🎙️ Tap to Speak</button>
-      <p id="mic-status" style="font-size:11px; color:#aaa; margin-top:6px; margin-bottom:0;">Speak directly to {active_char['name']}</p>
+      <button onclick="startListening()" style="background:#4f46e5; color:white; border:none; padding:8px 14px; border-radius:6px; font-weight:600; cursor:pointer; width:100%;">Start Microphone</button>
+      <p id="mic-status" style="font-size:11px; color:#888; margin-top:6px; margin-bottom:0;">Speak to {active_char['name']}</p>
     </div>
     <script>
     function startListening() {{
@@ -226,33 +232,9 @@ with st.sidebar:
     }}
     </script>
     """
-    components.html(mic_html, height=70)
+    components.html(mic_html, height=68)
 
-MEMORY_FILE = f"chat_memory_{mem_key}.json"
-
-def load_memory(default_prompt, greeting_msg):
-    if os.path.exists(MEMORY_FILE):
-        try:
-            with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, list) and len(data) > 0:
-                data[0]["content"] = default_prompt
-                return data
-        except Exception:
-            pass
-    return [
-        {"role": "system", "content": default_prompt},
-        {"role": "assistant", "content": greeting_msg}
-    ]
-
-def save_memory(messages):
-    try:
-        with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(messages[-30:], f, ensure_ascii=False, indent=2)
-    except Exception:
-        pass
-
-def get_viewer_html(html_path="index.html", raw_vrm_bytes=b"", char_name="Lily-Hime"):
+def get_viewer_html(html_path="index.html", raw_vrm_bytes=b"", char_name="Lily"):
     if not os.path.exists(html_path) or not raw_vrm_bytes:
         return ""
     b64_vrm = base64.b64encode(raw_vrm_bytes).decode("utf-8")
@@ -317,36 +299,34 @@ def detect_actions(text, user_text="", is_rude=False):
 
 is_rude_mode = "Rude" in mood_mode
 
-if "Sweet" in mood_mode:
-    mood_prompt = "You are warm, devoted, and affectionate toward Master katanaking."
-    action_examples = "*blushes deeply*, *giggles shyly*, *waves happily*, or *strikes an idol pose*"
-    emoji_style = "(✿◠‿◠)"
+if "Calm" in mood_mode:
+    mood_prompt = "You are warm, polite, and helpful toward katanaking."
+    action_examples = "*nods politely*, *smiles*, *waves*, or *gestures calmly*"
 elif "Tsundere" in mood_mode:
-    mood_prompt = "You are a sharp-tongued tsundere! Act flustered and stubborn while secretly caring about katanaking."
-    action_examples = "*blushes deeply*, *shyly looks away*, *pouts*, or *giggles shyly*"
-    emoji_style = "(⁄ ⁄>⁄ ▽ ⁄<⁄ ⁄)"
+    mood_prompt = "You are sharp-tongued and defensive, yet secretly helpful toward katanaking."
+    action_examples = "*glances away*, *pouts*, *crosses arms*, or *smirks*"
 elif is_rude_mode:
     mood_prompt = (
-        "You are RUDE, blunt, sarcastic, and brutally honest! Roasts and snappy comebacks only. "
-        "Never call him 'Master' politely—mock him, sigh at his questions, roll your eyes, and act like talking to him is a huge chore."
+        "You are rude, blunt, sarcastic, and dry. Give sharp comebacks and act unimpressed by katanaking's questions."
     )
-    action_examples = "*pouts and crosses arms*, *sighs and looks away*, *glares annoyed*, or *scoffs*"
-    emoji_style = "(¬_¬)"
+    action_examples = "*sighs*, *crosses arms*, *looks away unimpressed*, or *scoffs*"
 else:
-    mood_prompt = "You are upbeat, witty, and playful!"
-    action_examples = "*waves happily*, *does a cute twirl*, *giggles shyly*, or *strikes an idol pose*"
-    emoji_style = "(ﾉ◕ヮ◕)ﾉ*:･ﾟ✧"
+    mood_prompt = "You are direct, energetic, and concise."
+    action_examples = "*waves*, *twirls*, *smiles*, or *poses*"
 
 SYSTEM_PROMPT = (
     f"{active_char['bio']} {mood_prompt} "
-    f"Always start your reply with a roleplay action in asterisks like {action_examples}, "
-    f"along with text kaomoji like {emoji_style}. Keep responses punchy (1 to 2 sentences max). "
-    "katanaking coded and created you! If shown an image, react in character to what you see!"
+    f"Start replies with a brief roleplay action in asterisks like {action_examples}. "
+    "Keep responses concise (1 to 2 sentences max). katanaking created you."
 )
 
-state_msg_key = f"messages_{mem_key}"
+# Strictly per-session chat history (never written to shared disk)
+state_msg_key = f"session_messages_{session_key}"
 if state_msg_key not in st.session_state:
-    st.session_state[state_msg_key] = load_memory(SYSTEM_PROMPT, active_char["greeting"])
+    st.session_state[state_msg_key] = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "assistant", "content": active_char["greeting"]}
+    ]
 if "last_user_input" not in st.session_state:
     st.session_state.last_user_input = ""
 
@@ -355,41 +335,35 @@ active_messages = st.session_state[state_msg_key]
 
 with st.sidebar:
     st.markdown("---")
-    st.markdown("### 💾 Memory & Export")
+    st.markdown("#### Session Privacy & Export")
+    st.caption("Chats stay isolated to your current browser session.")
     chat_export_text = "\n\n".join(
         [f"{m['role'].upper()}: {m['content']}" for m in active_messages if m["role"] != "system"]
     )
     st.download_button(
-        label=f"📥 Download {active_char['name']} Chat",
+        label="Export Session Log (.txt)",
         data=chat_export_text,
-        file_name=f"{mem_key}_chat_log.txt",
+        file_name=f"{session_key}_session_log.txt",
         mime="text/plain"
     )
-    if st.button(f"🗑️ Clear {active_char['name']} Memory"):
-        if os.path.exists(MEMORY_FILE):
-            os.remove(MEMORY_FILE)
-        reset_msg = (
-            f"*pouts and looks away* Great, you wiped my memory. Happy now, katanaking? (¬_¬)"
-            if is_rude_mode else
-            f"*waves happily* Memory cleared! Fresh start with {active_char['name']}, katanaking! (✿◠‿◠)"
-        )
+    if st.button("Clear Session History"):
         st.session_state[state_msg_key] = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "assistant", "content": reset_msg}
+            {"role": "assistant", "content": active_char["greeting"]}
         ]
         st.rerun()
 
-is_fullscreen_hud = "Full-Screen" in layout_mode
+is_fullscreen_hud = layout_mode == "Theater HUD"
 
 @st.fragment
 def render_chat_panel(box_height=300):
     if not is_fullscreen_hud:
-        st.markdown(f"#### {active_char['icon']} {active_char['name']}'s Room")
+        st.markdown(f"#### {active_char['name']} — Session Chat")
 
-    with st.expander(f"📸 Show {active_char['name']} an Image / Screenshot", expanded=False):
-        uploaded_img = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg", "webp"], label_visibility="collapsed", key=f"img_{mem_key}")
+    with st.expander("Attach Image for Vision Analysis", expanded=False):
+        uploaded_img = st.file_uploader("Upload image", type=["png", "jpg", "jpeg", "webp"], label_visibility="collapsed", key=f"img_{session_key}")
         if uploaded_img:
-            st.image(uploaded_img, width=160, caption=f"Ready to show {active_char['name']}!")
+            st.image(uploaded_img, width=160, caption="Attached image")
 
     chat_box = st.container(height=box_height)
 
@@ -400,14 +374,14 @@ def render_chat_panel(box_height=300):
             icon = active_char["icon"] if message["role"] == "assistant" else None
             with st.chat_message(message["role"], avatar=icon):
                 if message["role"] == "assistant":
-                    bubble = f'<div class="anime-bubble">{message["content"]}</div>'
+                    bubble = f'<div class="studio-bubble">{message["content"]}</div>'
                     st.markdown(bubble, unsafe_allow_html=True)
                 else:
                     st.markdown(message["content"])
 
-    if user_input := st.chat_input(f"Talk to {active_char['name']}..."):
+    if user_input := st.chat_input(f"Message {active_char['name']}..."):
         st.session_state.last_user_input = user_input
-        display_text = f"🖼️ *[Shared an image]* {user_input}" if uploaded_img else user_input
+        display_text = f"*[Image attached]* {user_input}" if uploaded_img else user_input
 
         with chat_box:
             with st.chat_message("user"):
@@ -436,13 +410,12 @@ def render_chat_panel(box_height=300):
                         temperature=0.8 if is_rude_mode else 0.7
                     )
                     ai_response = response.choices[0].message.content
-                    bubble = f'<div class="anime-bubble">{ai_response}</div>'
+                    bubble = f'<div class="studio-bubble">{ai_response}</div>'
                     st.markdown(bubble, unsafe_allow_html=True)
 
                 active_messages.append({"role": "assistant", "content": ai_response})
-                save_memory(active_messages)
             except Exception as e:
-                st.error(f"⚠️ API call failed: {e}")
+                st.error(f"API call failed: {e}")
 
     last_msg = active_messages[-1]["content"] if active_messages else ""
     state_payload = json.dumps({
@@ -455,6 +428,7 @@ def render_chat_panel(box_height=300):
         "accessory": accessory_choice,
         "particles": particle_mode,
         "lighting": lighting_theme,
+        "orb": show_orb_toy,
         "voice": {
             "profile": voice_profile,
             "pitch": voice_pitch,
@@ -479,7 +453,7 @@ if is_fullscreen_hud:
     if viewer_html:
         components.html(viewer_html, height=640, scrolling=False)
     else:
-        st.error(f"⚠️ Ensure index.html and {selected_vrm_file} are at repo root.")
+        st.error(f"Ensure index.html and {selected_vrm_file} are at repo root.")
     render_chat_panel(box_height=180)
 else:
     model_column, chat_column = st.columns([0.46, 0.54])
@@ -487,6 +461,6 @@ else:
         if viewer_html:
             components.html(viewer_html, height=430, scrolling=False)
         else:
-            st.error(f"⚠️ Ensure index.html and {selected_vrm_file} are at repo root.")
+            st.error(f"Ensure index.html and {selected_vrm_file} are at repo root.")
     with chat_column:
         render_chat_panel(box_height=300)
