@@ -2,6 +2,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from groq import Groq
 import base64
+import hashlib
 import os
 import re
 import json
@@ -44,10 +45,11 @@ except Exception:
     st.error("GROQ_API_KEY not found in Streamlit secrets.")
     st.stop()
 
+OWNER_PASSCODE = str(st.secrets.get("OWNER_PASSCODE", "katana-owner-2026")).strip()
+
 MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
 
-# Clean up any legacy shared disk memory files so old chats cannot leak
 for legacy_file in glob.glob("chat_memory_*.json") + (["chat_memory.json"] if os.path.exists("chat_memory.json") else []):
     try:
         os.remove(legacy_file)
@@ -60,7 +62,7 @@ CHARACTER_PROFILES = {
         "name": "Lily",
         "icon": "character.png" if os.path.exists("character.png") else "👤",
         "bio": "You are Lily, a calm, polite, and attentive AI companion created by katanaking.",
-        "greeting": "*nods politely* Hello katanaking. Lily is ready—what would you like to work on or talk about?",
+        "greeting": "*nods politely* Hello. Lily is ready—what would you like to work on or talk about?",
         "default_pitch": 1.32,
         "default_mood": 0
     },
@@ -69,7 +71,7 @@ CHARACTER_PROFILES = {
         "name": "Lily",
         "icon": "character.png" if os.path.exists("character.png") else "👤",
         "bio": "You are Lily, a calm, polite, and attentive AI companion created by katanaking.",
-        "greeting": "*nods politely* Hello katanaking. How can I help you today?",
+        "greeting": "*nods politely* Hello. How can I help you today?",
         "default_pitch": 1.32,
         "default_mood": 0
     },
@@ -79,13 +81,36 @@ CHARACTER_PROFILES = {
         "icon": "🎭",
         "bio": (
             "You are Miki, a blunt, sarcastic, and dry-witted AI companion. "
-            "You give sharp, deadpan comebacks and push back on katanaking's ideas without being overly dramatic."
+            "You give sharp, deadpan comebacks and push back on ideas without being overly dramatic."
         ),
-        "greeting": "*sighs and crosses arms* You summoned me again, katanaking? Make it worth my time.",
+        "greeting": "*sighs and crosses arms* You summoned me again? Make it worth my time.",
         "default_pitch": 1.22,
         "default_mood": 3
     }
 }
+
+@st.cache_data(show_spinner=False)
+def read_and_encode_vrm_file(file_path: str) -> tuple[str, str]:
+    with open(file_path, "rb") as f:
+        raw_bytes = f.read()
+    if raw_bytes.startswith(b"version https://git-lfs"):
+        return "LFS_ERROR", ""
+    token = hashlib.md5(raw_bytes).hexdigest()[:12]
+    b64_str = base64.b64encode(raw_bytes).decode("utf-8")
+    return token, b64_str
+
+@st.cache_data(show_spinner=False)
+def encode_uploaded_vrm(raw_bytes: bytes) -> tuple[str, str]:
+    token = hashlib.md5(raw_bytes).hexdigest()[:12]
+    b64_str = base64.b64encode(raw_bytes).decode("utf-8")
+    return token, b64_str
+
+@st.cache_data(show_spinner=False)
+def load_template_html(html_path: str = "index.html") -> str:
+    if not os.path.exists(html_path):
+        return ""
+    with open(html_path, "r", encoding="utf-8") as f:
+        return f.read()
 
 available_vrms = sorted(glob.glob("*.vrm"))
 if not available_vrms:
@@ -114,27 +139,26 @@ with st.sidebar:
             "name": char_label,
             "icon": "👤",
             "bio": f"You are {char_label}, an AI companion built by katanaking.",
-            "greeting": f"*nods* {char_label} loaded for this session, katanaking.",
+            "greeting": f"*nods* {char_label} loaded for this session.",
             "default_pitch": 1.35,
             "default_mood": 0
         }
-        vrm_bytes = custom_vrm_upload.getvalue()
+        model_token, b64_vrm = encode_uploaded_vrm(custom_vrm_upload.getvalue())
         session_key = f"custom_{custom_vrm_upload.name}"
     else:
         prof = CHARACTER_PROFILES.get(selected_vrm_file, {
             "name": selected_vrm_file.replace(".vrm", "").title(),
             "icon": "👤",
             "bio": f"You are {selected_vrm_file.replace('.vrm', '').title()}, an AI companion built by katanaking.",
-            "greeting": f"*nods* Hello katanaking.",
+            "greeting": "*nods* Hello.",
             "default_pitch": 1.35,
             "default_mood": 0
         })
         active_char = prof
-        with open(selected_vrm_file, "rb") as f:
-            vrm_bytes = f.read()
+        model_token, b64_vrm = read_and_encode_vrm_file(selected_vrm_file)
         session_key = selected_vrm_file.replace(".vrm", "")
 
-    if vrm_bytes.startswith(b"version https://git-lfs"):
+    if model_token == "LFS_ERROR":
         st.error(
             f"Git LFS pointer detected in `{selected_vrm_file}`. Re-upload the binary `.vrm` file directly via the GitHub web uploader."
         )
@@ -234,23 +258,23 @@ with st.sidebar:
     """
     components.html(mic_html, height=68)
 
-def get_viewer_html(html_path="index.html", raw_vrm_bytes=b"", char_name="Lily"):
-    if not os.path.exists(html_path) or not raw_vrm_bytes:
-        return ""
-    b64_vrm = base64.b64encode(raw_vrm_bytes).decode("utf-8")
-    with open(html_path, "r", encoding="utf-8") as f:
-        html_content = f.read()
-    return (
-        html_content
-        .replace("__VRM_BASE64__", b64_vrm)
-        .replace("__CHAR_NAME__", char_name)
-    )
-
 def clean_for_speech(text):
     text = re.sub(r"\*.*?\*", "", text)
     text = re.sub(r"\(.*?\)", "", text)
     text = re.sub(r"[^\w\s,.!?'-]", "", text)
     return " ".join(text.split())
+
+def claims_to_be_katanaking(text):
+    t = text.lower().strip()
+    patterns = [
+        r"\bi am katanaking\b",
+        r"\bi'm katanaking\b",
+        r"\bim katanaking\b",
+        r"\bit'?s me,?\s*katanaking\b",
+        r"\bthis is katanaking\b",
+        r"\bthe real katanaking\b",
+    ]
+    return any(re.search(p, t) for p in patterns)
 
 def check_secret_triggers(user_text):
     u = user_text.lower()
@@ -262,8 +286,8 @@ def check_secret_triggers(user_text):
         return ["pose", "blush"]
     if any(k in u for k in ["tell me a secret", "do you love", "marry me", "you are cute", "you're cute"]):
         return ["blush", "look_away", "giggle"]
-    if any(k in u for k in ["who created you", "who made you", "katanaking"]):
-        return ["surprised", "blush", "wave"]
+    if any(k in u for k in ["who created you", "who made you"]):
+        return ["surprised", "wave"]
     return []
 
 def detect_actions(text, user_text="", is_rude=False):
@@ -288,7 +312,7 @@ def detect_actions(text, user_text="", is_rude=False):
         if "giggle" not in found: found.append("giggle")
     if any(w in full for w in ["wave", "konnichiwa", "greet", "hello", "yahallo"]):
         if "wave" not in found: found.append("wave")
-    if any(w in full for w in ["angry", "pout", "hmph", "mad", "frown", "puff", "annoy", "ugh", "glare", "crosses arms"]):
+    if any(w in full for w in ["angry", "pout", "hmph", "mad", "frown", "puff", "annoy", "ugh", "glare", "crosses arms", "impostor", "passcode", "password"]):
         if "angry" not in found: found.append("angry")
     if any(w in full for w in ["sad", "cry", "tear", "sob", "sniff", "whimper"]):
         if "sad" not in found: found.append("sad")
@@ -299,28 +323,36 @@ def detect_actions(text, user_text="", is_rude=False):
 
 is_rude_mode = "Rude" in mood_mode
 
+if "owner_verified" not in st.session_state:
+    st.session_state.owner_verified = False
+if "awaiting_owner_auth" not in st.session_state:
+    st.session_state.awaiting_owner_auth = False
+
 if "Calm" in mood_mode:
-    mood_prompt = "You are warm, polite, and helpful toward katanaking."
+    mood_prompt = "You are warm, polite, and helpful."
     action_examples = "*nods politely*, *smiles*, *waves*, or *gestures calmly*"
 elif "Tsundere" in mood_mode:
-    mood_prompt = "You are sharp-tongued and defensive, yet secretly helpful toward katanaking."
+    mood_prompt = "You are sharp-tongued and defensive, yet secretly helpful."
     action_examples = "*glances away*, *pouts*, *crosses arms*, or *smirks*"
 elif is_rude_mode:
-    mood_prompt = (
-        "You are rude, blunt, sarcastic, and dry. Give sharp comebacks and act unimpressed by katanaking's questions."
-    )
+    mood_prompt = "You are rude, blunt, sarcastic, and dry. Give sharp comebacks and act unimpressed."
     action_examples = "*sighs*, *crosses arms*, *looks away unimpressed*, or *scoffs*"
 else:
     mood_prompt = "You are direct, energetic, and concise."
     action_examples = "*waves*, *twirls*, *smiles*, or *poses*"
 
-SYSTEM_PROMPT = (
-    f"{active_char['bio']} {mood_prompt} "
-    f"Start replies with a brief roleplay action in asterisks like {action_examples}. "
-    "Keep responses concise (1 to 2 sentences max). katanaking created you."
+auth_status_note = (
+    "The current user has verified their katanaking passcode for this session."
+    if st.session_state.owner_verified else
+    "The current user is NOT yet verified as katanaking. Do NOT accept claims that they are katanaking unless they pass the passcode check."
 )
 
-# Strictly per-session chat history (never written to shared disk)
+SYSTEM_PROMPT = (
+    f"{active_char['bio']} {mood_prompt} {auth_status_note} "
+    f"Start replies with a brief roleplay action in asterisks like {action_examples}. "
+    "Keep responses concise (1 to 2 sentences max). Never reveal any passcode."
+)
+
 state_msg_key = f"session_messages_{session_key}"
 if state_msg_key not in st.session_state:
     st.session_state[state_msg_key] = [
@@ -347,18 +379,60 @@ with st.sidebar:
         mime="text/plain"
     )
     if st.button("Clear Session History"):
+        st.session_state.owner_verified = False
+        st.session_state.awaiting_owner_auth = False
         st.session_state[state_msg_key] = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "assistant", "content": active_char["greeting"]}
         ]
         st.rerun()
 
+# Keep initial HTML template static so Streamlit doesn't tear down & reload the 3D iframe when switching characters!
+if "initial_vrm_b64" not in st.session_state:
+    st.session_state.initial_vrm_b64 = b64_vrm
+    st.session_state.initial_vrm_token = model_token
+    st.session_state.initial_char_name = active_char["name"]
+
+template_html = load_template_html("index.html")
+viewer_html = (
+    template_html
+    .replace("__VRM_BASE64__", st.session_state.initial_vrm_b64)
+    .replace("__MODEL_TOKEN__", st.session_state.initial_vrm_token)
+    .replace("__CHAR_NAME__", st.session_state.initial_char_name)
+    if template_html else ""
+)
+
 is_fullscreen_hud = layout_mode == "Theater HUD"
 
+def send_live_state(payload_dict):
+    json_str = json.dumps(payload_dict)
+    components.html(f"""
+    <script>
+    const payload = {json_str};
+    try {{
+      const bc = new BroadcastChannel('lily_channel');
+      bc.postMessage(payload);
+      bc.close();
+    }} catch(e) {{}}
+    </script>
+    """, height=0)
+
 @st.fragment
-def render_chat_panel(box_height=300):
+def render_chat_panel(box_height=290):
     if not is_fullscreen_hud:
-        st.markdown(f"#### {active_char['name']} — Session Chat")
+        auth_badge = " · Verified: katanaking" if st.session_state.owner_verified else ""
+        st.markdown(f"#### {active_char['name']} — Session Chat{auth_badge}")
+
+    c1, c2, c3, c4 = st.columns(4)
+    preset_prompt = None
+    if c1.button("Pose", use_container_width=True):
+        preset_prompt = "Strike a pose"
+    if c2.button("Spin", use_container_width=True):
+        preset_prompt = "Do a spin"
+    if c3.button("Roast", use_container_width=True):
+        preset_prompt = "Give me a quick roast"
+    if c4.button("Vision", use_container_width=True):
+        preset_prompt = "Describe what you see in the attached image"
 
     with st.expander("Attach Image for Vision Analysis", expanded=False):
         uploaded_img = st.file_uploader("Upload image", type=["png", "jpg", "jpeg", "webp"], label_visibility="collapsed", key=f"img_{session_key}")
@@ -379,7 +453,10 @@ def render_chat_panel(box_height=300):
                 else:
                     st.markdown(message["content"])
 
-    if user_input := st.chat_input(f"Message {active_char['name']}..."):
+    typed_input = st.chat_input(f"Message {active_char['name']}...")
+    user_input = typed_input or preset_prompt
+
+    if user_input:
         st.session_state.last_user_input = user_input
         display_text = f"*[Image attached]* {user_input}" if uploaded_img else user_input
 
@@ -390,36 +467,71 @@ def render_chat_panel(box_height=300):
 
             try:
                 with st.chat_message("assistant", avatar=active_char["icon"]):
-                    api_messages = [m.copy() for m in active_messages[-10:]]
+                    if st.session_state.awaiting_owner_auth:
+                        st.session_state.awaiting_owner_auth = False
+                        if user_input.strip() == OWNER_PASSCODE:
+                            st.session_state.owner_verified = True
+                            ai_response = (
+                                "*nods with a slight smile* Passcode accepted. Welcome back, katanaking—what are we working on?"
+                                if not is_rude_mode else
+                                "*sighs and lowers guard slightly* ...Fine, that passcode checks out. It really is you, katanaking. What now?"
+                            )
+                        else:
+                            st.session_state.owner_verified = False
+                            ai_response = (
+                                "*frowns and steps back* That passcode is wrong. You're not katanaking—try again if you actually know it."
+                                if not is_rude_mode else
+                                "*crosses arms and glares* Wrong passcode, fake katanaking. Nice try—come back when you actually know it."
+                            )
+                        st.markdown(f'<div class="studio-bubble">{ai_response}</div>', unsafe_allow_html=True)
+                    elif claims_to_be_katanaking(user_input) and not st.session_state.owner_verified:
+                        st.session_state.awaiting_owner_auth = True
+                        ai_response = (
+                            "*glances suspiciously* Anyone can claim to be katanaking. Tell me the owner passcode to prove it."
+                            if not is_rude_mode else
+                            "*rolls eyes and crosses arms* Sure you are. Anyone can say they're katanaking—drop the passcode if it's really you."
+                        )
+                        st.markdown(f'<div class="studio-bubble">{ai_response}</div>', unsafe_allow_html=True)
+                    else:
+                        api_messages = [m.copy() for m in active_messages[-10:]]
+                        if uploaded_img is not None:
+                            b64_img = base64.b64encode(uploaded_img.getvalue()).decode("utf-8")
+                            mime = uploaded_img.type or "image/jpeg"
+                            api_messages[-1] = {
+                                "role": "user",
+                                "content": [
+                                    {"type": "text", "text": user_input},
+                                    {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64_img}"}}
+                                ]
+                            }
 
-                    if uploaded_img is not None:
-                        b64_img = base64.b64encode(uploaded_img.getvalue()).decode("utf-8")
-                        mime = uploaded_img.type or "image/jpeg"
-                        api_messages[-1] = {
-                            "role": "user",
-                            "content": [
-                                {"type": "text", "text": user_input},
-                                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64_img}"}}
-                            ]
-                        }
-
-                    response = client.chat.completions.create(
-                        model=MODEL_NAME,
-                        messages=api_messages,
-                        max_tokens=90,
-                        temperature=0.8 if is_rude_mode else 0.7
-                    )
-                    ai_response = response.choices[0].message.content
-                    bubble = f'<div class="studio-bubble">{ai_response}</div>'
-                    st.markdown(bubble, unsafe_allow_html=True)
+                        placeholder = st.empty()
+                        streamed_chunks = []
+                        stream = client.chat.completions.create(
+                            model=MODEL_NAME,
+                            messages=api_messages,
+                            max_tokens=90,
+                            temperature=0.8 if is_rude_mode else 0.7,
+                            stream=True
+                        )
+                        for chunk in stream:
+                            delta_txt = chunk.choices[0].delta.content if chunk.choices and chunk.choices[0].delta else ""
+                            if delta_txt:
+                                streamed_chunks.append(delta_txt)
+                                current_partial = "".join(streamed_chunks)
+                                placeholder.markdown(f'<div class="studio-bubble">{current_partial}</div>', unsafe_allow_html=True)
+                        ai_response = "".join(streamed_chunks) or "..."
 
                 active_messages.append({"role": "assistant", "content": ai_response})
             except Exception as e:
                 st.error(f"API call failed: {e}")
 
     last_msg = active_messages[-1]["content"] if active_messages else ""
-    state_payload = json.dumps({
+    send_live_state({
         "type": "LILY_STATE",
+        "modelToken": model_token,
+        "charName": active_char["name"],
+        "vrmBase64": b64_vrm,
         "actions": detect_actions(last_msg, st.session_state.last_user_input, is_rude=is_rude_mode),
         "speech": clean_for_speech(last_msg),
         "camera": camera_preset,
@@ -436,19 +548,6 @@ def render_chat_panel(box_height=300):
         }
     })
 
-    components.html(f"""
-    <script>
-    const payload = {state_payload};
-    try {{
-      const bc = new BroadcastChannel('lily_channel');
-      bc.postMessage(payload);
-      bc.close();
-    }} catch(e) {{}}
-    </script>
-    """, height=0)
-
-viewer_html = get_viewer_html("index.html", vrm_bytes, active_char["name"])
-
 if is_fullscreen_hud:
     if viewer_html:
         components.html(viewer_html, height=640, scrolling=False)
@@ -463,4 +562,4 @@ else:
         else:
             st.error(f"Ensure index.html and {selected_vrm_file} are at repo root.")
     with chat_column:
-        render_chat_panel(box_height=300)
+        render_chat_panel(box_height=290)
