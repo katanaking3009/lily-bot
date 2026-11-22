@@ -89,16 +89,6 @@ CHARACTER_PROFILES = {
     }
 }
 
-@st.cache_data(show_spinner=False)
-def get_vrm_b64_fallback(file_path: str) -> str:
-    if not os.path.exists(file_path):
-        return ""
-    with open(file_path, "rb") as f:
-        raw = f.read()
-    if raw.startswith(b"version https://git-lfs") or len(raw) < 2048:
-        return ""
-    return base64.b64encode(raw).decode("utf-8")
-
 available_vrms = sorted(glob.glob("*.vrm"))
 if not available_vrms:
     available_vrms = ["lily_avatar.vrm", "miki.vrm"]
@@ -127,7 +117,6 @@ with st.sidebar:
     })
     active_char = prof
     active_vrm_url = f"{GITHUB_RAW_BASE}/{selected_vrm_file}"
-    active_vrm_b64 = get_vrm_b64_fallback(selected_vrm_file)
     session_key = selected_vrm_file.replace(".vrm", "")
 
     layout_mode = st.radio(
@@ -229,10 +218,7 @@ def clean_for_speech(text):
     return " ".join(text.split())
 
 def claims_to_be_katanaking(text):
-    t = text.lower().strip()
-    if "katanaking" in t:
-        return True
-    return False
+    return "katanaking" in text.lower().strip()
 
 def check_secret_triggers(user_text):
     u = user_text.lower()
@@ -350,7 +336,6 @@ if os.path.exists("index.html"):
         viewer_html = (
             f.read()
             .replace("__VRM_URL__", active_vrm_url)
-            .replace("__VRM_BASE64__", active_vrm_b64)
             .replace("__CHAR_NAME__", active_char["name"])
         )
 else:
@@ -422,7 +407,6 @@ def render_chat_panel(box_height=290):
 
             try:
                 with st.chat_message("assistant", avatar=active_char["icon"]):
-                    # Direct passcode match at any time OR when awaiting_owner_auth is active
                     if cleaned_input.lower() == OWNER_PASSCODE.lower():
                         st.session_state.owner_verified = True
                         st.session_state.awaiting_owner_auth = False
@@ -487,7 +471,6 @@ def render_chat_panel(box_height=290):
     send_live_state({
         "type": "LILY_STATE",
         "vrmUrl": active_vrm_url,
-        "vrmBase64": active_vrm_b64,
         "charName": active_char["name"],
         "actions": detect_actions(last_msg, st.session_state.last_user_input, is_rude=is_rude_mode),
         "speech": clean_for_speech(last_msg),
