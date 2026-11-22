@@ -22,9 +22,8 @@
       font-size: 12px;
       font-weight: bold;
       z-index: 10;
-      max-width: 92vw;
+      max-width: 90vw;
       word-break: break-word;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
     }
     #emotion-badge {
       position: absolute;
@@ -86,7 +85,7 @@
   </script>
 </head>
 <body>
-  <div id="status">Loading __CHAR_NAME__...</div>
+  <div id="status">Summoning __CHAR_NAME__...</div>
   <div id="emotion-badge">Ready</div>
   <div id="sound-hint">Tap character to interact</div>
   <div class="bottom-controls">
@@ -107,46 +106,36 @@
     const snapBtn = document.getElementById('snap-btn');
     const fsBtn = document.getElementById('fs-btn');
     let activeCharName = "__CHAR_NAME__";
-    let loadedModelToken = "";
-
-    window.addEventListener('error', (ev) => {
-      status.style.display = 'block';
-      status.textContent = "Script Error: " + (ev.message || "Unknown error");
-    });
-
-    window.addEventListener('unhandledrejection', (ev) => {
-      status.style.display = 'block';
-      status.textContent = "Async Error: " + (ev.reason?.message || ev.reason || "Promise rejected");
-    });
+    let loadedModelUrl = "";
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = 0.98;
     document.body.appendChild(renderer.domElement);
 
-    const camera = new THREE.PerspectiveCamera(28.0, window.innerWidth / window.innerHeight, 0.05, 50.0);
-    camera.position.set(0.0, 1.25, 1.95);
+    const camera = new THREE.PerspectiveCamera(26.0, window.innerWidth / window.innerHeight, 0.1, 20.0);
+    camera.position.set(0.0, 1.30, 1.65);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0.0, 1.15, 0.0);
+    controls.target.set(0.0, 1.22, 0.0);
     controls.enableDamping = true;
     controls.update();
 
-    const camPosTarget = new THREE.Vector3(0.0, 1.25, 1.95);
-    const ctrlTarget = new THREE.Vector3(0.0, 1.15, 0.0);
+    const camPosTarget = new THREE.Vector3(0.0, 1.30, 1.65);
+    const ctrlTarget = new THREE.Vector3(0.0, 1.22, 0.0);
 
     const scene = new THREE.Scene();
-    const keyLight = new THREE.DirectionalLight(0xfff5f8, 1.45);
-    keyLight.position.set(1.2, 1.8, 1.6);
+    const keyLight = new THREE.DirectionalLight(0xfff5f8, 1.35);
+    keyLight.position.set(1.2, 1.6, 1.5);
     scene.add(keyLight);
 
     const rimLight = new THREE.PointLight(0x00ffff, 0.0, 6.0);
     rimLight.position.set(-1.2, 1.4, -0.8);
     scene.add(rimLight);
 
-    const ambLight = new THREE.AmbientLight(0xffffff, 0.7);
+    const ambLight = new THREE.AmbientLight(0xffffff, 0.65);
     scene.add(ambLight);
 
     let audioCtx = null;
@@ -302,10 +291,10 @@
         document.body.style.setProperty('--bg-gradient', 'radial-gradient(circle at 50% 35%, #fff0f6 0%, #ffd6e7 100%)');
         keyLight.color.setHex(0xfff5f8); keyLight.intensity = 1.35;
         rimLight.intensity = 0.0;
-        ambLight.color.setHex(0xffffff); ambLight.intensity = 0.7;
+        ambLight.color.setHex(0xffffff); ambLight.intensity = 0.65;
       }
     }
-    applyLightingTheme("Auto");
+    applyLightingTheme("Studio Softbox");
 
     let currentVrm = null;
     let baseRotationY = 0.0;
@@ -623,17 +612,14 @@
     loader.register((parser) => new VRMLoaderPlugin(parser));
     const clock = new THREE.Clock();
 
-    function loadVrmFromBase64(b64String, tokenId, charName) {
-      if (!b64String || b64String === "__VRM_BASE64__") {
-        status.textContent = "Missing VRM base64 payload.";
-        return;
-      }
+    function loadVrmFromUrl(url, charName) {
+      if (!url || url === "__VRM_URL__") return;
       if (charName) activeCharName = charName;
-      if (tokenId && tokenId === loadedModelToken && currentVrm) return;
-      loadedModelToken = tokenId || String(b64String.length);
+      if (url === loadedModelUrl && currentVrm) return;
+      loadedModelUrl = url;
 
       status.style.display = 'block';
-      status.textContent = `Loading ${activeCharName}...`;
+      status.textContent = `Summoning ${activeCharName}...`;
 
       if (currentVrm) {
         scene.remove(currentVrm.scene);
@@ -641,77 +627,45 @@
         currentVrm = null;
       }
 
-      let blobUrl = null;
-      try {
-        const bin = atob(b64String);
-        const bytes = new Uint8Array(bin.length);
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-        blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
-      } catch (decodeErr) {
-        status.textContent = "Base64 Decode Error: " + decodeErr.message;
-        return;
-      }
-
       loader.load(
-        blobUrl,
+        url,
         (gltf) => {
-          try {
-            const vrm = gltf.userData.vrm;
-            if (!vrm || !vrm.scene) {
-              status.textContent = "File loaded as GLTF, but missing VRM userData.";
-              URL.revokeObjectURL(blobUrl);
-              return;
-            }
-            try { VRMUtils.removeUnnecessaryVertices(gltf.scene); } catch (e) {}
-            try { VRMUtils.rotateVRM0(vrm); } catch (e) {}
+          const vrm = gltf.userData.vrm;
+          VRMUtils.removeUnnecessaryVertices(gltf.scene);
+          VRMUtils.rotateVRM0(vrm);
+          baseRotationY = vrm.scene.rotation.y;
+          vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
 
-            baseRotationY = vrm.scene.rotation.y;
-            vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
+          const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
+          if (headNode) {
+            blushGroup = createAnimeBlush(headNode);
+            accObjects = createAccessories(headNode);
+          }
 
-            const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
-            if (headNode) {
-              blushGroup = createAnimeBlush(headNode);
-              accObjects = createAccessories(headNode);
-            }
+          scene.add(vrm.scene);
 
-            scene.add(vrm.scene);
+          const h = vrm.humanoid;
+          const lArm = h?.getNormalizedBoneNode('leftUpperArm');
+          const rArm = h?.getNormalizedBoneNode('rightUpperArm');
+          if (lArm) lArm.rotation.z = 1.18;
+          if (rArm) rArm.rotation.z = -1.18;
 
-            const h = vrm.humanoid;
-            const lArm = h?.getNormalizedBoneNode('leftUpperArm');
-            const rArm = h?.getNormalizedBoneNode('rightUpperArm');
-            if (lArm) lArm.rotation.z = 1.18;
-            if (rArm) rArm.rotation.z = -1.18;
+          vrm.update(0.016);
+          vrm.springBoneManager?.reset();
+          clock.start();
 
-            vrm.update(0.016);
-            try { vrm.springBoneManager?.reset(); } catch (e) {}
-
-            // Auto-center camera target around upper body / chest height
-            const box = new THREE.Box3().setFromObject(vrm.scene);
-            if (!box.isEmpty()) {
-              const center = box.getCenter(new THREE.Vector3());
-              const size = box.getSize(new THREE.Vector3());
-              const focusY = box.min.y + size.y * 0.68;
-              ctrlTarget.set(center.x, focusY, center.z);
-              controls.target.copy(ctrlTarget);
-              camPosTarget.set(center.x, focusY + 0.05, center.z + Math.max(1.4, size.y * 1.15));
-              camera.position.copy(camPosTarget);
-              controls.update();
-            }
-
-            clock.start();
-            currentVrm = vrm;
-            status.style.display = 'none';
-          } catch (setupErr) {
-            status.textContent = "VRM Setup Error: " + setupErr.message;
-          } finally {
-            if (blobUrl) URL.revokeObjectURL(blobUrl);
+          currentVrm = vrm;
+          status.style.display = 'none';
+        },
+        (progress) => {
+          if (progress.total > 0) {
+            const pct = Math.round((progress.loaded / progress.total) * 100);
+            status.textContent = `Summoning ${activeCharName}... ${pct}%`;
           }
         },
-        undefined,
         (err) => {
-          status.textContent = "VRM Load Error: " + (err?.message || String(err));
+          status.textContent = "Error: " + (err?.message || String(err));
           console.error(err);
-          if (blobUrl) URL.revokeObjectURL(blobUrl);
         }
       );
     }
@@ -719,8 +673,8 @@
     window.applyLilyPayload = (data) => {
       if (!data) return;
 
-      if (data.vrmBase64 && data.modelToken !== loadedModelToken) {
-        loadVrmFromBase64(data.vrmBase64, data.modelToken, data.charName);
+      if (data.vrmUrl && data.vrmUrl !== loadedModelUrl) {
+        loadVrmFromUrl(data.vrmUrl, data.charName);
       }
 
       if (data.voice) voiceSettings = data.voice;
@@ -758,8 +712,8 @@
           camPosTarget.set(0.0, 1.05, 3.15);
           ctrlTarget.set(0.0, 0.98, 0.0);
         } else {
-          camPosTarget.set(0.0, 1.25, 1.95);
-          ctrlTarget.set(0.0, 1.15, 0.0);
+          camPosTarget.set(0.0, 1.30, 1.65);
+          ctrlTarget.set(0.0, 1.22, 0.0);
         }
       }
 
@@ -796,7 +750,7 @@
       if (ev.data && ev.data.type === "LILY_STATE") window.applyLilyPayload(ev.data);
     });
 
-    loadVrmFromBase64("__VRM_BASE64__", "__MODEL_TOKEN__", "__CHAR_NAME__");
+    loadVrmFromUrl("__VRM_URL__", "__CHAR_NAME__");
 
     function animate() {
       requestAnimationFrame(animate);
