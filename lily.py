@@ -9,8 +9,8 @@ import json
 import glob
 
 st.set_page_config(
-    page_title="3D Companion Studio",
-    page_icon="🎭",
+    page_title="katanaking Studio",
+    page_icon="⚔️",
     layout="wide"
 )
 
@@ -60,7 +60,7 @@ CHARACTER_PROFILES = {
     "lily_avatar.vrm": {
         "label": "Lily — Warm & Attentive",
         "name": "Lily",
-        "icon": "character.png" if os.path.exists("character.png") else "👤",
+        "icon": "character.png" if os.path.exists("character.png") else "⚔️",
         "bio": "You are Lily, a calm, polite, and attentive AI companion created by katanaking.",
         "greeting": "*nods politely* Hello. Lily is ready—what would you like to work on or talk about?",
         "default_pitch": 1.32,
@@ -69,7 +69,7 @@ CHARACTER_PROFILES = {
     "lily_model.vrm": {
         "label": "Lily — Standard",
         "name": "Lily",
-        "icon": "character.png" if os.path.exists("character.png") else "👤",
+        "icon": "character.png" if os.path.exists("character.png") else "⚔️",
         "bio": "You are Lily, a calm, polite, and attentive AI companion created by katanaking.",
         "greeting": "*nods politely* Hello. How can I help you today?",
         "default_pitch": 1.32,
@@ -78,7 +78,7 @@ CHARACTER_PROFILES = {
     "miki.vrm": {
         "label": "Miki — Blunt & Sarcastic",
         "name": "Miki",
-        "icon": "🎭",
+        "icon": "⚔️",
         "bio": (
             "You are Miki, a blunt, sarcastic, and dry-witted AI companion. "
             "You give sharp, deadpan comebacks and push back on ideas without being overly dramatic."
@@ -137,7 +137,7 @@ with st.sidebar:
         char_label = custom_vrm_upload.name.replace(".vrm", "").title()
         active_char = {
             "name": char_label,
-            "icon": "👤",
+            "icon": "⚔️",
             "bio": f"You are {char_label}, an AI companion built by katanaking.",
             "greeting": f"*nods* {char_label} loaded for this session.",
             "default_pitch": 1.35,
@@ -148,7 +148,7 @@ with st.sidebar:
     else:
         prof = CHARACTER_PROFILES.get(selected_vrm_file, {
             "name": selected_vrm_file.replace(".vrm", "").title(),
-            "icon": "👤",
+            "icon": "⚔️",
             "bio": f"You are {selected_vrm_file.replace('.vrm', '').title()}, an AI companion built by katanaking.",
             "greeting": "*nods* Hello.",
             "default_pitch": 1.35,
@@ -212,8 +212,6 @@ with st.sidebar:
         "Ambient Particles",
         ["Sakura Petals", "Hearts", "Sparkles", "Off"]
     )
-
-    show_orb_toy = st.checkbox("Interactive 3D Orb", value=True)
 
     st.markdown("---")
     st.markdown("#### Voice & Speech")
@@ -534,7 +532,6 @@ def render_chat_panel(box_height=290):
         "accessory": accessory_choice,
         "particles": particle_mode,
         "lighting": lighting_theme,
-        "orb": show_orb_toy,
         "voice": {
             "profile": voice_profile,
             "pitch": voice_pitch,
