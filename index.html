@@ -15,15 +15,16 @@
       position: absolute;
       top: 10px;
       left: 10px;
-      background: rgba(255, 255, 255, 0.92);
-      color: #d63384;
-      padding: 5px 11px;
-      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.94);
+      color: #c2185b;
+      padding: 6px 12px;
+      border-radius: 12px;
       font-size: 12px;
       font-weight: bold;
       z-index: 10;
-      max-width: 90vw;
-      word-break: break-all;
+      max-width: 92vw;
+      word-break: break-word;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
     }
     #emotion-badge {
       position: absolute;
@@ -87,7 +88,7 @@
 <body>
   <div id="status">Loading __CHAR_NAME__...</div>
   <div id="emotion-badge">Ready</div>
-  <div id="sound-hint">Tap character or toss the Orb</div>
+  <div id="sound-hint">Tap character to interact</div>
   <div class="bottom-controls">
     <button id="bgm-btn" class="hud-btn" title="Toggle Chill Ambient BGM">BGM: Off</button>
     <button id="snap-btn" class="hud-btn" title="Take Wallpaper Screenshot">Snap</button>
@@ -108,58 +109,45 @@
     let activeCharName = "__CHAR_NAME__";
     let loadedModelToken = "";
 
+    window.addEventListener('error', (ev) => {
+      status.style.display = 'block';
+      status.textContent = "Script Error: " + (ev.message || "Unknown error");
+    });
+
+    window.addEventListener('unhandledrejection', (ev) => {
+      status.style.display = 'block';
+      status.textContent = "Async Error: " + (ev.reason?.message || ev.reason || "Promise rejected");
+    });
+
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.98;
+    renderer.toneMappingExposure = 1.0;
     document.body.appendChild(renderer.domElement);
 
-    const camera = new THREE.PerspectiveCamera(26.0, window.innerWidth / window.innerHeight, 0.1, 20.0);
-    camera.position.set(0.0, 1.30, 1.65);
+    const camera = new THREE.PerspectiveCamera(28.0, window.innerWidth / window.innerHeight, 0.05, 50.0);
+    camera.position.set(0.0, 1.25, 1.95);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0.0, 1.22, 0.0);
+    controls.target.set(0.0, 1.15, 0.0);
     controls.enableDamping = true;
     controls.update();
 
-    const camPosTarget = new THREE.Vector3(0.0, 1.30, 1.65);
-    const ctrlTarget = new THREE.Vector3(0.0, 1.22, 0.0);
+    const camPosTarget = new THREE.Vector3(0.0, 1.25, 1.95);
+    const ctrlTarget = new THREE.Vector3(0.0, 1.15, 0.0);
 
     const scene = new THREE.Scene();
-    const keyLight = new THREE.DirectionalLight(0xfff5f8, 1.35);
-    keyLight.position.set(1.2, 1.6, 1.5);
+    const keyLight = new THREE.DirectionalLight(0xfff5f8, 1.45);
+    keyLight.position.set(1.2, 1.8, 1.6);
     scene.add(keyLight);
 
     const rimLight = new THREE.PointLight(0x00ffff, 0.0, 6.0);
     rimLight.position.set(-1.2, 1.4, -0.8);
     scene.add(rimLight);
 
-    const ambLight = new THREE.AmbientLight(0xffffff, 0.6);
+    const ambLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambLight);
-
-    const orbGroup = new THREE.Group();
-    const orbCore = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(0.055, 2),
-      new THREE.MeshStandardMaterial({
-        color: 0xff69b4,
-        emissive: 0xff1493,
-        emissiveIntensity: 0.65,
-        roughness: 0.2
-      })
-    );
-    const orbRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.078, 0.004, 12, 36),
-      new THREE.MeshBasicMaterial({ color: 0x00f0ff, transparent: true, opacity: 0.85 })
-    );
-    orbRing.rotation.x = Math.PI / 3;
-    orbGroup.add(orbCore, orbRing);
-    orbGroup.position.set(0.36, 1.25, 0.25);
-    scene.add(orbGroup);
-
-    const orbVel = new THREE.Vector3(0, 0, 0);
-    const orbAnchor = new THREE.Vector3(0.36, 1.25, 0.25);
-    let orbActiveTrackTimer = 0.0;
 
     let audioCtx = null;
     let bgmPlaying = false;
@@ -314,7 +302,7 @@
         document.body.style.setProperty('--bg-gradient', 'radial-gradient(circle at 50% 35%, #fff0f6 0%, #ffd6e7 100%)');
         keyLight.color.setHex(0xfff5f8); keyLight.intensity = 1.35;
         rimLight.intensity = 0.0;
-        ambLight.color.setHex(0xffffff); ambLight.intensity = 0.65;
+        ambLight.color.setHex(0xffffff); ambLight.intensity = 0.7;
       }
     }
     applyLightingTheme("Auto");
@@ -405,7 +393,7 @@
       return new THREE.CanvasTexture(c);
     }
 
-    const pCount = 32;
+    const pCount = 28;
     const pGeo = new THREE.BufferGeometry();
     const pPos = new Float32Array(pCount * 3);
     for (let i = 0; i < pCount; i++) {
@@ -605,14 +593,6 @@
       pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
 
       raycaster.setFromCamera(pointer, camera);
-      const orbHits = raycaster.intersectObject(orbGroup, true);
-      if (orbHits.length > 0) {
-        orbVel.set((Math.random() - 0.65) * 2.2, 1.4 + Math.random() * 1.1, (Math.random() - 0.5) * 1.4);
-        orbActiveTrackTimer = 4.0;
-        badge.textContent = "Orb Launched";
-        return;
-      }
-
       if (currentVrm) {
         const hits = raycaster.intersectObject(currentVrm.scene, true);
         if (hits.length > 0) {
@@ -644,7 +624,10 @@
     const clock = new THREE.Clock();
 
     function loadVrmFromBase64(b64String, tokenId, charName) {
-      if (!b64String || b64String === "__VRM_BASE64__") return;
+      if (!b64String || b64String === "__VRM_BASE64__") {
+        status.textContent = "Missing VRM base64 payload.";
+        return;
+      }
       if (charName) activeCharName = charName;
       if (tokenId && tokenId === loadedModelToken && currentVrm) return;
       loadedModelToken = tokenId || String(b64String.length);
@@ -654,50 +637,81 @@
 
       if (currentVrm) {
         scene.remove(currentVrm.scene);
-        VRMUtils.deepDispose(currentVrm.scene);
+        try { VRMUtils.deepDispose(currentVrm.scene); } catch (e) {}
         currentVrm = null;
       }
 
-      const bin = atob(b64String);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+      let blobUrl = null;
+      try {
+        const bin = atob(b64String);
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+      } catch (decodeErr) {
+        status.textContent = "Base64 Decode Error: " + decodeErr.message;
+        return;
+      }
 
       loader.load(
         blobUrl,
         (gltf) => {
-          const vrm = gltf.userData.vrm;
-          VRMUtils.removeUnnecessaryVertices(gltf.scene);
-          VRMUtils.rotateVRM0(vrm);
-          baseRotationY = vrm.scene.rotation.y;
-          vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
+          try {
+            const vrm = gltf.userData.vrm;
+            if (!vrm || !vrm.scene) {
+              status.textContent = "File loaded as GLTF, but missing VRM userData.";
+              URL.revokeObjectURL(blobUrl);
+              return;
+            }
+            try { VRMUtils.removeUnnecessaryVertices(gltf.scene); } catch (e) {}
+            try { VRMUtils.rotateVRM0(vrm); } catch (e) {}
 
-          const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
-          if (headNode) {
-            blushGroup = createAnimeBlush(headNode);
-            accObjects = createAccessories(headNode);
+            baseRotationY = vrm.scene.rotation.y;
+            vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
+
+            const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
+            if (headNode) {
+              blushGroup = createAnimeBlush(headNode);
+              accObjects = createAccessories(headNode);
+            }
+
+            scene.add(vrm.scene);
+
+            const h = vrm.humanoid;
+            const lArm = h?.getNormalizedBoneNode('leftUpperArm');
+            const rArm = h?.getNormalizedBoneNode('rightUpperArm');
+            if (lArm) lArm.rotation.z = 1.18;
+            if (rArm) rArm.rotation.z = -1.18;
+
+            vrm.update(0.016);
+            try { vrm.springBoneManager?.reset(); } catch (e) {}
+
+            // Auto-center camera target around upper body / chest height
+            const box = new THREE.Box3().setFromObject(vrm.scene);
+            if (!box.isEmpty()) {
+              const center = box.getCenter(new THREE.Vector3());
+              const size = box.getSize(new THREE.Vector3());
+              const focusY = box.min.y + size.y * 0.68;
+              ctrlTarget.set(center.x, focusY, center.z);
+              controls.target.copy(ctrlTarget);
+              camPosTarget.set(center.x, focusY + 0.05, center.z + Math.max(1.4, size.y * 1.15));
+              camera.position.copy(camPosTarget);
+              controls.update();
+            }
+
+            clock.start();
+            currentVrm = vrm;
+            status.style.display = 'none';
+          } catch (setupErr) {
+            status.textContent = "VRM Setup Error: " + setupErr.message;
+          } finally {
+            if (blobUrl) URL.revokeObjectURL(blobUrl);
           }
-
-          scene.add(vrm.scene);
-
-          const h = vrm.humanoid;
-          const lArm = h?.getNormalizedBoneNode('leftUpperArm');
-          const rArm = h?.getNormalizedBoneNode('rightUpperArm');
-          if (lArm) lArm.rotation.z = 1.18;
-          if (rArm) rArm.rotation.z = -1.18;
-
-          vrm.update(0.016);
-          vrm.springBoneManager?.reset();
-          clock.start();
-
-          currentVrm = vrm;
-          status.style.display = 'none';
-          URL.revokeObjectURL(blobUrl);
         },
         undefined,
         (err) => {
-          status.textContent = "Error: " + err.message;
+          status.textContent = "VRM Load Error: " + (err?.message || String(err));
           console.error(err);
+          if (blobUrl) URL.revokeObjectURL(blobUrl);
         }
       );
     }
@@ -712,7 +726,6 @@
       if (data.voice) voiceSettings = data.voice;
       if (data.lighting) applyLightingTheme(data.lighting);
       if (data.stage) applyStageFloor(data.stage);
-      if (data.orb !== undefined) orbGroup.visible = data.orb;
 
       if (data.actions) {
         activeActionsList = data.actions;
@@ -745,8 +758,8 @@
           camPosTarget.set(0.0, 1.05, 3.15);
           ctrlTarget.set(0.0, 0.98, 0.0);
         } else {
-          camPosTarget.set(0.0, 1.30, 1.65);
-          ctrlTarget.set(0.0, 1.22, 0.0);
+          camPosTarget.set(0.0, 1.25, 1.95);
+          ctrlTarget.set(0.0, 1.15, 0.0);
         }
       }
 
@@ -792,29 +805,6 @@
 
       camera.position.lerp(camPosTarget, 0.08);
       controls.target.lerp(ctrlTarget, 0.08);
-
-      if (orbGroup.visible) {
-        orbCore.rotation.y += delta * 2.2;
-        orbRing.rotation.z -= delta * 3.0;
-
-        if (orbActiveTrackTimer > 0) {
-          orbActiveTrackTimer -= delta;
-          orbVel.y -= 3.8 * delta;
-          orbGroup.position.addScaledVector(orbVel, delta);
-          if (orbGroup.position.y < 0.85) {
-            orbGroup.position.y = 0.85;
-            orbVel.y = Math.abs(orbVel.y) * 0.72;
-          }
-          if (Math.abs(orbGroup.position.x) > 0.65) orbVel.x *= -0.8;
-          if (orbGroup.position.distanceTo(new THREE.Vector3(0, 1.32, 0)) < 0.18 && actionDuration <= 0.5) {
-            activeActionsList = ["surprised"];
-            actionDuration = 2.5;
-            badge.textContent = "Surprised";
-          }
-        } else {
-          orbGroup.position.lerp(new THREE.Vector3(orbAnchor.x, orbAnchor.y + Math.sin(t * 2.5) * 0.04, orbAnchor.z), 0.08);
-        }
-      }
 
       if (sakuraFloor.visible) sakuraFloor.rotation.z = t * 0.25;
 
@@ -867,10 +857,6 @@
 
         let lookTargetX = pointer.x * 0.28;
         let lookTargetY = -pointer.y * 0.18;
-        if (orbActiveTrackTimer > 0 && orbGroup.visible) {
-          lookTargetX = THREE.MathUtils.clamp(-orbGroup.position.x * 0.85, -0.45, 0.45);
-          lookTargetY = THREE.MathUtils.clamp((1.35 - orbGroup.position.y) * 0.75, -0.35, 0.35);
-        }
 
         let spineX = Math.sin(t * 1.6) * 0.016;
         let spineY = 0.0;
