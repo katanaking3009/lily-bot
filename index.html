@@ -13,7 +13,7 @@
     canvas { width: 100vw; height: 100vh; display: block; cursor: pointer; }
     #status {
       position: absolute;
-      top: 10px;
+      bottom: 42px;
       left: 10px;
       background: rgba(255, 255, 255, 0.94);
       color: #c2185b;
@@ -21,9 +21,10 @@
       border-radius: 12px;
       font-size: 12px;
       font-weight: bold;
-      z-index: 10;
+      z-index: 20;
       max-width: 90vw;
       word-break: break-word;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
     }
     #emotion-badge {
       position: absolute;
@@ -77,8 +78,8 @@
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/",
+        "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/",
         "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.2/lib/three-vrm.module.min.js"
       }
     }
@@ -106,7 +107,12 @@
     const snapBtn = document.getElementById('snap-btn');
     const fsBtn = document.getElementById('fs-btn');
     let activeCharName = "__CHAR_NAME__";
-    let loadedModelKey = "";
+    let loadedModelUrl = "";
+
+    window.addEventListener('error', (ev) => {
+      status.style.display = 'block';
+      status.textContent = "Script Error: " + (ev.message || "Unknown");
+    });
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -149,7 +155,7 @@
         bgmPlaying = false;
         bgmBtn.textContent = "BGM: Off";
         if (bgmInterval) clearInterval(bgmInterval);
-        if (rainNode) { try { rainNode.stop(); } catch(e) {} rainNode = null; }
+        if (rainNode) { try { rainNode.stop(); } catch (e) {} rainNode = null; }
         if (bgmGain && audioCtx) bgmGain.gain.setTargetAtTime(0.0001, audioCtx.currentTime, 0.2);
         return;
       }
@@ -612,58 +618,14 @@
     loader.register((parser) => new VRMLoaderPlugin(parser));
     const clock = new THREE.Clock();
 
-    function mountLoadedGltf(gltf) {
-      const vrm = gltf.userData.vrm;
-      if (!vrm) {
-        status.textContent = "Loaded file is not a valid VRM model.";
+    function loadVrmFromUrl(url, charName) {
+      if (!url || url === "__VRM_URL__") {
+        status.textContent = "No VRM URL provided.";
         return;
       }
-      try { VRMUtils.removeUnnecessaryVertices(gltf.scene); } catch (e) {}
-      try { VRMUtils.rotateVRM0(vrm); } catch (e) {}
-      baseRotationY = vrm.scene.rotation.y;
-      vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
-
-      const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
-      if (headNode) {
-        blushGroup = createAnimeBlush(headNode);
-        accObjects = createAccessories(headNode);
-      }
-
-      scene.add(vrm.scene);
-
-      const h = vrm.humanoid;
-      const lArm = h?.getNormalizedBoneNode('leftUpperArm');
-      const rArm = h?.getNormalizedBoneNode('rightUpperArm');
-      if (lArm) lArm.rotation.z = 1.18;
-      if (rArm) rArm.rotation.z = -1.18;
-
-      vrm.update(0.016);
-      try { vrm.springBoneManager?.reset(); } catch (e) {}
-
-      // Auto-frame the model so it is guaranteed visible regardless of scale/origin
-      const box = new THREE.Box3().setFromObject(vrm.scene);
-      if (!box.isEmpty()) {
-        const size = box.getSize(new THREE.Vector3());
-        const center = box.getCenter(new THREE.Vector3());
-        const focusY = box.min.y + size.y * 0.72;
-        const dist = Math.max(1.35, size.y * 1.1);
-        ctrlTarget.set(center.x, focusY, center.z);
-        camPosTarget.set(center.x, focusY + 0.04, center.z + dist);
-        controls.target.copy(ctrlTarget);
-        camera.position.copy(camPosTarget);
-        controls.update();
-      }
-
-      clock.start();
-      currentVrm = vrm;
-      status.style.display = 'none';
-    }
-
-    async function loadVrmSmart(url, b64Fallback, charName) {
-      const key = (url || "") + "::" + (b64Fallback ? b64Fallback.slice(0, 24) : "");
       if (charName) activeCharName = charName;
-      if (key === loadedModelKey && currentVrm) return;
-      loadedModelKey = key;
+      if (url === loadedModelUrl && currentVrm) return;
+      loadedModelUrl = url;
 
       status.style.display = 'block';
       status.textContent = `Summoning ${activeCharName}...`;
@@ -674,58 +636,74 @@
         currentVrm = null;
       }
 
-      // 1. Try direct URL first
-      if (url && url !== "__VRM_URL__") {
-        try {
-          const resp = await fetch(url);
-          if (resp.ok) {
-            const buf = await resp.arrayBuffer();
-            if (buf.byteLength > 2048) {
-              const blobUrl = URL.createObjectURL(new Blob([buf], { type: "application/octet-stream" }));
-              loader.load(blobUrl, (gltf) => {
-                mountLoadedGltf(gltf);
-                URL.revokeObjectURL(blobUrl);
-              }, undefined, (err) => {
-                URL.revokeObjectURL(blobUrl);
-                status.textContent = "Parse error: " + (err?.message || err);
-              });
-              return;
-            }
+      loader.load(
+        url,
+        (gltf) => {
+          const vrm = gltf.userData.vrm;
+          if (!vrm) {
+            status.textContent = "File loaded, but missing VRM data.";
+            return;
           }
-        } catch (fetchErr) {
-          console.warn("Direct URL fetch failed, trying embedded bytes:", fetchErr);
-        }
-      }
+          try { VRMUtils.removeUnnecessaryVertices(gltf.scene); } catch (e) {}
+          try { VRMUtils.rotateVRM0(vrm); } catch (e) {}
 
-      // 2. Fallback to embedded base64 bytes (for Private GitHub repos or local uploads)
-      if (b64Fallback && b64Fallback !== "__VRM_BASE64__") {
-        try {
-          const bin = atob(b64Fallback);
-          const bytes = new Uint8Array(bin.length);
-          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-          const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
-          loader.load(blobUrl, (gltf) => {
-            mountLoadedGltf(gltf);
-            URL.revokeObjectURL(blobUrl);
-          }, undefined, (err) => {
-            URL.revokeObjectURL(blobUrl);
-            status.textContent = "VRM error: " + (err?.message || err);
-          });
-          return;
-        } catch (b64Err) {
-          status.textContent = "Decode error: " + b64Err.message;
-          return;
-        }
-      }
+          baseRotationY = vrm.scene.rotation.y;
+          vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
 
-      status.textContent = `Could not fetch ${activeCharName}. Check if repo is Public or re-upload .vrm.`;
+          const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
+          if (headNode) {
+            blushGroup = createAnimeBlush(headNode);
+            accObjects = createAccessories(headNode);
+          }
+
+          scene.add(vrm.scene);
+
+          const h = vrm.humanoid;
+          const lArm = h?.getNormalizedBoneNode('leftUpperArm');
+          const rArm = h?.getNormalizedBoneNode('rightUpperArm');
+          if (lArm) lArm.rotation.z = 1.18;
+          if (rArm) rArm.rotation.z = -1.18;
+
+          vrm.update(0.016);
+          try { vrm.springBoneManager?.reset(); } catch (e) {}
+
+          // Auto-frame the model so it is guaranteed visible
+          const box = new THREE.Box3().setFromObject(vrm.scene);
+          if (!box.isEmpty()) {
+            const size = box.getSize(new THREE.Vector3());
+            const center = box.getCenter(new THREE.Vector3());
+            const focusY = box.min.y + size.y * 0.72;
+            const dist = Math.max(1.35, size.y * 1.1);
+            ctrlTarget.set(center.x, focusY, center.z);
+            camPosTarget.set(center.x, focusY + 0.04, center.z + dist);
+            controls.target.copy(ctrlTarget);
+            camera.position.copy(camPosTarget);
+            controls.update();
+          }
+
+          clock.start();
+          currentVrm = vrm;
+          status.style.display = 'none';
+        },
+        (progress) => {
+          if (progress.total > 0) {
+            const pct = Math.round((progress.loaded / progress.total) * 100);
+            status.textContent = `Summoning ${activeCharName}... ${pct}%`;
+          }
+        },
+        (err) => {
+          status.style.display = 'block';
+          status.textContent = "VRM Load Error: " + (err?.message || String(err));
+          console.error(err);
+        }
+      );
     }
 
     window.applyLilyPayload = (data) => {
       if (!data) return;
 
-      if (data.vrmUrl || data.vrmBase64) {
-        loadVrmSmart(data.vrmUrl, data.vrmBase64, data.charName);
+      if (data.vrmUrl && data.vrmUrl !== loadedModelUrl) {
+        loadVrmFromUrl(data.vrmUrl, data.charName);
       }
 
       if (data.voice) voiceSettings = data.voice;
@@ -801,7 +779,7 @@
       if (ev.data && ev.data.type === "LILY_STATE") window.applyLilyPayload(ev.data);
     });
 
-    loadVrmSmart("__VRM_URL__", "__VRM_BASE64__", "__CHAR_NAME__");
+    loadVrmFromUrl("__VRM_URL__", "__CHAR_NAME__");
 
     function animate() {
       requestAnimationFrame(animate);
