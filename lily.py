@@ -387,18 +387,12 @@ with st.sidebar:
         ]
         st.rerun()
 
-# Keep initial HTML template static so Streamlit doesn't tear down & reload the 3D iframe when switching characters!
-if "initial_vrm_b64" not in st.session_state:
-    st.session_state.initial_vrm_b64 = b64_vrm
-    st.session_state.initial_vrm_token = model_token
-    st.session_state.initial_char_name = active_char["name"]
-
 template_html = load_template_html("index.html")
 viewer_html = (
     template_html
-    .replace("__VRM_BASE64__", st.session_state.initial_vrm_b64)
-    .replace("__MODEL_TOKEN__", st.session_state.initial_vrm_token)
-    .replace("__CHAR_NAME__", st.session_state.initial_char_name)
+    .replace("__VRM_BASE64__", b64_vrm)
+    .replace("__MODEL_TOKEN__", model_token)
+    .replace("__CHAR_NAME__", active_char["name"])
     if template_html else ""
 )
 
