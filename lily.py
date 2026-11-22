@@ -2,7 +2,6 @@ import streamlit as st
 import streamlit.components.v1 as components
 from groq import Groq
 import base64
-import hashlib
 import os
 import re
 import json
@@ -46,6 +45,7 @@ except Exception:
     st.stop()
 
 OWNER_PASSCODE = str(st.secrets.get("OWNER_PASSCODE", "katana-owner-2026")).strip()
+GITHUB_RAW_BASE = "https://raw.githubusercontent.com/katanaking3009/lily-bot/main"
 
 MODEL_NAME = "qwen/qwen3.8-27b"
 client = Groq(api_key=api_key)
@@ -89,33 +89,9 @@ CHARACTER_PROFILES = {
     }
 }
 
-@st.cache_data(show_spinner=False)
-def read_and_encode_vrm_file(file_path: str) -> tuple[str, str]:
-    with open(file_path, "rb") as f:
-        raw_bytes = f.read()
-    if raw_bytes.startswith(b"version https://git-lfs"):
-        return "LFS_ERROR", ""
-    token = hashlib.md5(raw_bytes).hexdigest()[:12]
-    b64_str = base64.b64encode(raw_bytes).decode("utf-8")
-    return token, b64_str
-
-@st.cache_data(show_spinner=False)
-def encode_uploaded_vrm(raw_bytes: bytes) -> tuple[str, str]:
-    token = hashlib.md5(raw_bytes).hexdigest()[:12]
-    b64_str = base64.b64encode(raw_bytes).decode("utf-8")
-    return token, b64_str
-
-@st.cache_data(show_spinner=False)
-def load_template_html(html_path: str = "index.html") -> str:
-    if not os.path.exists(html_path):
-        return ""
-    with open(html_path, "r", encoding="utf-8") as f:
-        return f.read()
-
 available_vrms = sorted(glob.glob("*.vrm"))
 if not available_vrms:
-    st.error("No .vrm files found in the repository root.")
-    st.stop()
+    available_vrms = ["lily_avatar.vrm", "miki.vrm"]
 
 with st.sidebar:
     st.title("Studio Controls")
@@ -131,38 +107,17 @@ with st.sidebar:
     )
     selected_vrm_file = available_vrms[selected_idx]
 
-    custom_vrm_upload = st.file_uploader("Load Local .VRM (Session Only)", type=["vrm"])
-
-    if custom_vrm_upload is not None:
-        char_label = custom_vrm_upload.name.replace(".vrm", "").title()
-        active_char = {
-            "name": char_label,
-            "icon": "⚔️",
-            "bio": f"You are {char_label}, an AI companion built by katanaking.",
-            "greeting": f"*nods* {char_label} loaded for this session.",
-            "default_pitch": 1.35,
-            "default_mood": 0
-        }
-        model_token, b64_vrm = encode_uploaded_vrm(custom_vrm_upload.getvalue())
-        session_key = f"custom_{custom_vrm_upload.name}"
-    else:
-        prof = CHARACTER_PROFILES.get(selected_vrm_file, {
-            "name": selected_vrm_file.replace(".vrm", "").title(),
-            "icon": "⚔️",
-            "bio": f"You are {selected_vrm_file.replace('.vrm', '').title()}, an AI companion built by katanaking.",
-            "greeting": "*nods* Hello.",
-            "default_pitch": 1.35,
-            "default_mood": 0
-        })
-        active_char = prof
-        model_token, b64_vrm = read_and_encode_vrm_file(selected_vrm_file)
-        session_key = selected_vrm_file.replace(".vrm", "")
-
-    if model_token == "LFS_ERROR":
-        st.error(
-            f"Git LFS pointer detected in `{selected_vrm_file}`. Re-upload the binary `.vrm` file directly via the GitHub web uploader."
-        )
-        st.stop()
+    prof = CHARACTER_PROFILES.get(selected_vrm_file, {
+        "name": selected_vrm_file.replace(".vrm", "").title(),
+        "icon": "⚔️",
+        "bio": f"You are {selected_vrm_file.replace('.vrm', '').title()}, an AI companion built by katanaking.",
+        "greeting": "*nods* Hello.",
+        "default_pitch": 1.35,
+        "default_mood": 0
+    })
+    active_char = prof
+    active_vrm_url = f"{GITHUB_RAW_BASE}/{selected_vrm_file}"
+    session_key = selected_vrm_file.replace(".vrm", "")
 
     layout_mode = st.radio(
         "Layout Mode",
@@ -385,14 +340,15 @@ with st.sidebar:
         ]
         st.rerun()
 
-template_html = load_template_html("index.html")
-viewer_html = (
-    template_html
-    .replace("__VRM_BASE64__", b64_vrm)
-    .replace("__MODEL_TOKEN__", model_token)
-    .replace("__CHAR_NAME__", active_char["name"])
-    if template_html else ""
-)
+if os.path.exists("index.html"):
+    with open("index.html", "r", encoding="utf-8") as f:
+        viewer_html = (
+            f.read()
+            .replace("__VRM_URL__", active_vrm_url)
+            .replace("__CHAR_NAME__", active_char["name"])
+        )
+else:
+    viewer_html = ""
 
 is_fullscreen_hud = layout_mode == "Theater HUD"
 
@@ -521,9 +477,8 @@ def render_chat_panel(box_height=290):
     last_msg = active_messages[-1]["content"] if active_messages else ""
     send_live_state({
         "type": "LILY_STATE",
-        "modelToken": model_token,
+        "vrmUrl": active_vrm_url,
         "charName": active_char["name"],
-        "vrmBase64": b64_vrm,
         "actions": detect_actions(last_msg, st.session_state.last_user_input, is_rude=is_rude_mode),
         "speech": clean_for_speech(last_msg),
         "camera": camera_preset,
@@ -543,7 +498,7 @@ if is_fullscreen_hud:
     if viewer_html:
         components.html(viewer_html, height=640, scrolling=False)
     else:
-        st.error(f"Ensure index.html and {selected_vrm_file} are at repo root.")
+        st.error("Ensure index.html is at repo root.")
     render_chat_panel(box_height=180)
 else:
     model_column, chat_column = st.columns([0.46, 0.54])
@@ -551,6 +506,6 @@ else:
         if viewer_html:
             components.html(viewer_html, height=430, scrolling=False)
         else:
-            st.error(f"Ensure index.html and {selected_vrm_file} are at repo root.")
+            st.error("Ensure index.html is at repo root.")
     with chat_column:
         render_chat_panel(box_height=290)
