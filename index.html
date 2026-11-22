@@ -79,7 +79,7 @@
       "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
         "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/",
-        "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3/lib/three-vrm.module.min.js"
+        "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.2/lib/three-vrm.module.min.js"
       }
     }
   </script>
@@ -106,28 +106,28 @@
     const snapBtn = document.getElementById('snap-btn');
     const fsBtn = document.getElementById('fs-btn');
     let activeCharName = "__CHAR_NAME__";
-    let loadedModelUrl = "";
+    let loadedModelKey = "";
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.98;
+    renderer.toneMappingExposure = 1.0;
     document.body.appendChild(renderer.domElement);
 
-    const camera = new THREE.PerspectiveCamera(26.0, window.innerWidth / window.innerHeight, 0.1, 20.0);
-    camera.position.set(0.0, 1.30, 1.65);
+    const camera = new THREE.PerspectiveCamera(28.0, window.innerWidth / window.innerHeight, 0.05, 50.0);
+    camera.position.set(0.0, 1.28, 1.85);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(0.0, 1.22, 0.0);
+    controls.target.set(0.0, 1.18, 0.0);
     controls.enableDamping = true;
     controls.update();
 
-    const camPosTarget = new THREE.Vector3(0.0, 1.30, 1.65);
-    const ctrlTarget = new THREE.Vector3(0.0, 1.22, 0.0);
+    const camPosTarget = new THREE.Vector3(0.0, 1.28, 1.85);
+    const ctrlTarget = new THREE.Vector3(0.0, 1.18, 0.0);
 
     const scene = new THREE.Scene();
-    const keyLight = new THREE.DirectionalLight(0xfff5f8, 1.35);
+    const keyLight = new THREE.DirectionalLight(0xfff5f8, 1.4);
     keyLight.position.set(1.2, 1.6, 1.5);
     scene.add(keyLight);
 
@@ -135,7 +135,7 @@
     rimLight.position.set(-1.2, 1.4, -0.8);
     scene.add(rimLight);
 
-    const ambLight = new THREE.AmbientLight(0xffffff, 0.65);
+    const ambLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambLight);
 
     let audioCtx = null;
@@ -289,9 +289,9 @@
         ambLight.color.setHex(0x3a4b6e); ambLight.intensity = 0.45;
       } else {
         document.body.style.setProperty('--bg-gradient', 'radial-gradient(circle at 50% 35%, #fff0f6 0%, #ffd6e7 100%)');
-        keyLight.color.setHex(0xfff5f8); keyLight.intensity = 1.35;
+        keyLight.color.setHex(0xfff5f8); keyLight.intensity = 1.4;
         rimLight.intensity = 0.0;
-        ambLight.color.setHex(0xffffff); ambLight.intensity = 0.65;
+        ambLight.color.setHex(0xffffff); ambLight.intensity = 0.7;
       }
     }
     applyLightingTheme("Studio Softbox");
@@ -612,11 +612,58 @@
     loader.register((parser) => new VRMLoaderPlugin(parser));
     const clock = new THREE.Clock();
 
-    function loadVrmFromUrl(url, charName) {
-      if (!url || url === "__VRM_URL__") return;
+    function mountLoadedGltf(gltf) {
+      const vrm = gltf.userData.vrm;
+      if (!vrm) {
+        status.textContent = "Loaded file is not a valid VRM model.";
+        return;
+      }
+      try { VRMUtils.removeUnnecessaryVertices(gltf.scene); } catch (e) {}
+      try { VRMUtils.rotateVRM0(vrm); } catch (e) {}
+      baseRotationY = vrm.scene.rotation.y;
+      vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
+
+      const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
+      if (headNode) {
+        blushGroup = createAnimeBlush(headNode);
+        accObjects = createAccessories(headNode);
+      }
+
+      scene.add(vrm.scene);
+
+      const h = vrm.humanoid;
+      const lArm = h?.getNormalizedBoneNode('leftUpperArm');
+      const rArm = h?.getNormalizedBoneNode('rightUpperArm');
+      if (lArm) lArm.rotation.z = 1.18;
+      if (rArm) rArm.rotation.z = -1.18;
+
+      vrm.update(0.016);
+      try { vrm.springBoneManager?.reset(); } catch (e) {}
+
+      // Auto-frame the model so it is guaranteed visible regardless of scale/origin
+      const box = new THREE.Box3().setFromObject(vrm.scene);
+      if (!box.isEmpty()) {
+        const size = box.getSize(new THREE.Vector3());
+        const center = box.getCenter(new THREE.Vector3());
+        const focusY = box.min.y + size.y * 0.72;
+        const dist = Math.max(1.35, size.y * 1.1);
+        ctrlTarget.set(center.x, focusY, center.z);
+        camPosTarget.set(center.x, focusY + 0.04, center.z + dist);
+        controls.target.copy(ctrlTarget);
+        camera.position.copy(camPosTarget);
+        controls.update();
+      }
+
+      clock.start();
+      currentVrm = vrm;
+      status.style.display = 'none';
+    }
+
+    async function loadVrmSmart(url, b64Fallback, charName) {
+      const key = (url || "") + "::" + (b64Fallback ? b64Fallback.slice(0, 24) : "");
       if (charName) activeCharName = charName;
-      if (url === loadedModelUrl && currentVrm) return;
-      loadedModelUrl = url;
+      if (key === loadedModelKey && currentVrm) return;
+      loadedModelKey = key;
 
       status.style.display = 'block';
       status.textContent = `Summoning ${activeCharName}...`;
@@ -627,54 +674,58 @@
         currentVrm = null;
       }
 
-      loader.load(
-        url,
-        (gltf) => {
-          const vrm = gltf.userData.vrm;
-          VRMUtils.removeUnnecessaryVertices(gltf.scene);
-          VRMUtils.rotateVRM0(vrm);
-          baseRotationY = vrm.scene.rotation.y;
-          vrm.scene.traverse((obj) => { obj.frustumCulled = false; });
-
-          const headNode = vrm.humanoid?.getNormalizedBoneNode('head');
-          if (headNode) {
-            blushGroup = createAnimeBlush(headNode);
-            accObjects = createAccessories(headNode);
+      // 1. Try direct URL first
+      if (url && url !== "__VRM_URL__") {
+        try {
+          const resp = await fetch(url);
+          if (resp.ok) {
+            const buf = await resp.arrayBuffer();
+            if (buf.byteLength > 2048) {
+              const blobUrl = URL.createObjectURL(new Blob([buf], { type: "application/octet-stream" }));
+              loader.load(blobUrl, (gltf) => {
+                mountLoadedGltf(gltf);
+                URL.revokeObjectURL(blobUrl);
+              }, undefined, (err) => {
+                URL.revokeObjectURL(blobUrl);
+                status.textContent = "Parse error: " + (err?.message || err);
+              });
+              return;
+            }
           }
-
-          scene.add(vrm.scene);
-
-          const h = vrm.humanoid;
-          const lArm = h?.getNormalizedBoneNode('leftUpperArm');
-          const rArm = h?.getNormalizedBoneNode('rightUpperArm');
-          if (lArm) lArm.rotation.z = 1.18;
-          if (rArm) rArm.rotation.z = -1.18;
-
-          vrm.update(0.016);
-          vrm.springBoneManager?.reset();
-          clock.start();
-
-          currentVrm = vrm;
-          status.style.display = 'none';
-        },
-        (progress) => {
-          if (progress.total > 0) {
-            const pct = Math.round((progress.loaded / progress.total) * 100);
-            status.textContent = `Summoning ${activeCharName}... ${pct}%`;
-          }
-        },
-        (err) => {
-          status.textContent = "Error: " + (err?.message || String(err));
-          console.error(err);
+        } catch (fetchErr) {
+          console.warn("Direct URL fetch failed, trying embedded bytes:", fetchErr);
         }
-      );
+      }
+
+      // 2. Fallback to embedded base64 bytes (for Private GitHub repos or local uploads)
+      if (b64Fallback && b64Fallback !== "__VRM_BASE64__") {
+        try {
+          const bin = atob(b64Fallback);
+          const bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+          const blobUrl = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+          loader.load(blobUrl, (gltf) => {
+            mountLoadedGltf(gltf);
+            URL.revokeObjectURL(blobUrl);
+          }, undefined, (err) => {
+            URL.revokeObjectURL(blobUrl);
+            status.textContent = "VRM error: " + (err?.message || err);
+          });
+          return;
+        } catch (b64Err) {
+          status.textContent = "Decode error: " + b64Err.message;
+          return;
+        }
+      }
+
+      status.textContent = `Could not fetch ${activeCharName}. Check if repo is Public or re-upload .vrm.`;
     }
 
     window.applyLilyPayload = (data) => {
       if (!data) return;
 
-      if (data.vrmUrl && data.vrmUrl !== loadedModelUrl) {
-        loadVrmFromUrl(data.vrmUrl, data.charName);
+      if (data.vrmUrl || data.vrmBase64) {
+        loadVrmSmart(data.vrmUrl, data.vrmBase64, data.charName);
       }
 
       if (data.voice) voiceSettings = data.voice;
@@ -712,8 +763,8 @@
           camPosTarget.set(0.0, 1.05, 3.15);
           ctrlTarget.set(0.0, 0.98, 0.0);
         } else {
-          camPosTarget.set(0.0, 1.30, 1.65);
-          ctrlTarget.set(0.0, 1.22, 0.0);
+          camPosTarget.set(0.0, 1.28, 1.85);
+          ctrlTarget.set(0.0, 1.18, 0.0);
         }
       }
 
@@ -750,7 +801,7 @@
       if (ev.data && ev.data.type === "LILY_STATE") window.applyLilyPayload(ev.data);
     });
 
-    loadVrmFromUrl("__VRM_URL__", "__CHAR_NAME__");
+    loadVrmSmart("__VRM_URL__", "__VRM_BASE64__", "__CHAR_NAME__");
 
     function animate() {
       requestAnimationFrame(animate);
