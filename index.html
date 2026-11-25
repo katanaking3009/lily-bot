@@ -619,8 +619,8 @@
     const clock = new THREE.Clock();
 
     function loadVrmFromUrl(url, charName) {
-      if (!url || url === "__VRM_URL__") {
-        status.textContent = "No VRM URL provided.";
+      if (!url || !url.startsWith("http")) {
+        status.textContent = "Invalid VRM URL: " + url;
         return;
       }
       if (charName) activeCharName = charName;
@@ -667,7 +667,6 @@
           vrm.update(0.016);
           try { vrm.springBoneManager?.reset(); } catch (e) {}
 
-          // Auto-frame the model so it is guaranteed visible
           const box = new THREE.Box3().setFromObject(vrm.scene);
           if (!box.isEmpty()) {
             const size = box.getSize(new THREE.Vector3());
